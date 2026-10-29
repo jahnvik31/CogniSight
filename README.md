@@ -1,189 +1,41 @@
-# CogniSight — Complete End-to-End Visual Understanding & Voice Assistance System
+# CogniSight
 
-CogniSight is an AI-assisted visual understanding and personalized memory system designed for cognitive assistance.
+CogniSight is an assistive technology project intended to support people living with dementia through contextual recognition, navigation assistance, and caregiver support.
 
----
+## Project Status
 
-## Complete Pipeline Architecture
+**Phase:** Code audit and integration planning.
 
-```text
-┌───────────────────────────┐
-│     Webcam Live Feed      │
-└─────────────┬─────────────┘
-              │
-              ▼
-┌───────────────────────────┐
-│     Face Detector         │  <-- InsightFace SCRFD
-└─────────────┬─────────────┘
-              │
-              ▼
-┌───────────────────────────┐
-│     Face Embedder         │  <-- ArcFace 512-D L2 Vector
-└─────────────┬─────────────┘
-              │
-              ▼
-┌───────────────────────────┐
-│     Similarity Matcher    │  <-- L2 Cosine Dot Product against SQLite
-└─────────────┬─────────────┘
-              │
-              ▼
-┌───────────────────────────┐
-│     Person Memory         │  <-- Relationships, Personal Notes & Last Seen
-└─────────────┬─────────────┘
-              │
-              ▼
-┌───────────────────────────┐
-│     Context Engine        │  <-- Synthesizes perception + memory into state
-└─────────────┬─────────────┘
-              │
-              ▼
-┌───────────────────────────┐
-│     Voice Assistant       │  <-- Non-blocking Text-To-Speech (pyttsx3)
-└───────────────────────────┘
-```
+The team is consolidating independently developed modules into one maintainable application. Existing implementations are being reviewed before migration.
 
----
+## Planned Modules
 
-## Core Features & Modules Built
+### 1. Contextual Facial Recognition
+Recognises registered people and uses stored relationship and contextual information to provide meaningful assistance.
 
-1. **Face Detection**: Fast SCRFD detection producing bounding boxes `[x1, y1, x2, y2]` and detection confidence scores.
-2. **Face Embedding**: ArcFace MobileFaceNet model producing 512-dimensional float32 L2-normalized embeddings.
-3. **Person Enrollment**: Automated voice microphone enrollment and quality-checked sample validation ($\ge 80\text{px}$, confidence $\ge 60\%$).
-4. **Database Storage**: SQLAlchemy 2.0 ORM over SQLite storing binary-serialized 512-D vectors, Person Profiles, and Interaction Logs.
-5. **Similarity Matcher**: Fast dot-product Cosine Similarity with configurable decision thresholding (`FACE_RECOGNITION_THRESHOLD=0.50`).
-6. **Real-Time Recognition & Stability**: Multi-face spatial tracking with temporal smoothing (rolling majority voting over $K=5$ frames) and frame-skipping performance optimization (`RECOGNITION_INTERVAL=3`).
-7. **Person Memory**: Stores relationships (e.g. "Sister / Caregiver / Friend"), personal memory notes ("Loves tea with 2 sugars"), and automatically updates `last_seen` timestamps.
-8. **Context Engine**: Synthesizes real-time perception with memory into structured headlines, subtexts, and spoken announcements.
-9. **Voice Assistant**: Non-blocking Text-To-Speech audio output engine & Web Speech API continuous microphone audio enrollment with periodic 30-second memory reminders.
-10. **Interactive Web Dashboard**: Full-featured Web UI (`http://127.0.0.1:8000`) with live MJPEG stream, unknown person voice enrollment, memory profile editor, and API Swagger docs.
+### 2. Outdoor Navigation
+Uses GPS-based location information to support outdoor navigation.
 
----
+### 3. Indoor Navigation
+Planned functionality to help users navigate indoor environments.
 
-## Project Structure
+### 4. Caregiver Support
+Planned interface for relevant user status and caregiver assistance.
 
-```text
-CogniSight/
-│
-├── app/
-│   ├── main.py                     # FastAPI app entrypoint & OpenAPI docs
-│   │
-│   ├── config/
-│   │   ├── __init__.py
-│   │   └── settings.py             # App configuration settings
-│   │
-│   ├── camera/
-│   │   ├── __init__.py
-│   │   └── camera.py               # OpenCV video capture stream
-│   │
-│   ├── face/
-│   │   ├── __init__.py
-│   │   ├── detector.py             # InsightFace SCRFD face detector
-│   │   ├── embedding.py            # ArcFace 512-D embedding generator
-│   │   ├── matcher.py              # Cosine similarity matching engine
-│   │   ├── recognizer.py           # Master recognition engine with temporal smoothing
-│   │   ├── enroll.py               # Quality-checked person enrollment CLI & service
-│   │   └── schemas.py              # BoundingBox & RecognitionResult data models
-│   │
-│   ├── memory/
-│   │   ├── __init__.py
-│   │   └── memory_service.py       # Memory profile, relationship, & notes service
-│   │
-│   ├── context/
-│   │   ├── __init__.py
-│   │   └── context_engine.py       # Perception + Memory Context Synthesis Engine
-│   │
-│   ├── voice/
-│   │   ├── __init__.py
-│   │   └── voice_assistant.py      # Non-blocking Text-To-Speech engine
-│   │
-│   ├── database/
-│   │   ├── __init__.py
-│   │   ├── database.py             # SQLAlchemy engine & sessionmaker
-│   │   ├── models.py               # Person, FaceEmbedding, PersonProfile, InteractionLog
-│   │   └── repository.py           # Database CRUD repository layer
-│   │
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── recognition_service.py  # Service layer for recognition & enrollment
-│   │   └── cognisight_pipeline.py  # Integrated CogniSight Pipeline Orchestrator
-│   │
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── routes.py               # FastAPI REST endpoints
-│   │   └── schemas.py              # API Request/Response DTO models
-│   │
-│   └── utils/
-│       ├── __init__.py
-│       └── logging_config.py       # Structured logging setup
-│
-├── data/                           # SQLite database & outputs
-│   └── cognisight.db
-│
-├── scripts/                        # Standalone runner scripts
-│   ├── demo_detector.py
-│   ├── demo_embedding.py
-│   ├── demo_enrollment.py
-│   ├── demo_matcher.py
-│   ├── run_webcam_detection.py
-│   ├── run_realtime_recognition.py
-│   └── run_cognisight_full.py      # Complete system launcher
-│
-├── tests/                          # Automated Pytest test suite (26 tests)
-│   ├── conftest.py
-│   ├── test_api.py
-│   ├── test_database.py
-│   ├── test_detector.py
-│   ├── test_embedding.py
-│   ├── test_enrollment.py
-│   ├── test_matcher.py
-│   ├── test_memory_context_voice.py
-│   └── test_recognizer.py
-│
-├── .env                            # Active environment settings
-├── .env.example                    # Environment template
-├── .gitignore                      # Git exclusion rules
-├── requirements.txt                # Package dependencies
-└── README.md                       # Comprehensive documentation
-```
+*Module descriptions represent project goals; implementation status will be documented as each module is verified.*
 
----
+## Development Workflow
 
-## Execution Guide
+- `main` contains the stable, reviewed version.
+- Develop new work on feature branches.
+- Submit pull requests for review before merging.
+- Test changes and document setup instructions.
+- Track work and known issues through GitHub Issues.
 
-### 1. Run Complete Integrated System (Webcam + Memory + Voice)
-```powershell
-.\.venv\Scripts\python.exe -m scripts.run_cognisight_full
-```
+## Setup
 
-### 2. Enroll a Person (CLI)
-```powershell
-.\.venv\Scripts\python.exe -m app.face.enroll --name "John" --samples 10
-```
+Setup instructions will be added after the existing code has been audited and the project structure and dependencies have been agreed upon.
 
-### 3. Run FastAPI Backend Server
-```powershell
-.\.venv\Scripts\uvicorn.exe app.main:app --reload --host 127.0.0.1 --port 8000
-```
-Open **`http://127.0.0.1:8000/docs`** to manage profiles, upload images, and trigger voice announcements!
+## Team
 
-### 4. Run Pytest Suite
-```powershell
-.\.venv\Scripts\pytest.exe tests/ -v
-```
-**Status:** `26 passed`
-
----
-
-## REST API Endpoints Summary
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/v1/health` | Service health status & model configuration |
-| `GET` | `/api/v1/persons` | List all enrolled person profiles with memory |
-| `GET` | `/api/v1/persons/{id}` | Get specific person details and memory notes |
-| `POST` | `/api/v1/persons` | Create a new person profile |
-| `PUT` | `/api/v1/persons/{id}/memory` | Update relationship and memory notes |
-| `DELETE` | `/api/v1/persons/{id}` | Delete person profile and associated embeddings |
-| `POST` | `/api/v1/recognition/predict` | Face recognition on uploaded image file |
-| `POST` | `/api/v1/enrollment/upload` | Batch enrollment from uploaded image files |
-| `POST` | `/api/v1/voice/speak` | Trigger Text-To-Speech voice announcement |
+This is a collaborative student project. Module ownership and contributions will be documented as integration progresses.

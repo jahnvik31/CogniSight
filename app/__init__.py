@@ -1,1 +1,0 @@
-# CogniSight App Package
