@@ -1,3 +1,1 @@
-from app.api.routes import router
-
-__all__ = ["router"]
+"""CogniSight REST API package."""

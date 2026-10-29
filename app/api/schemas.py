@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from app.face.schemas import BoundingBox, RecognitionResult
@@ -85,3 +85,56 @@ class HealthResponse(BaseModel):
     version: str
     model: str
     threshold: float
+
+
+class IndoorRouteRequest(BaseModel):
+    """Request DTO for finding indoor route by location names."""
+
+    start: str = Field(
+        ...,
+        description="Starting landmark ID or display name (e.g. 'entrance')",
+        json_schema_extra={"example": "entrance"},
+    )
+    destination: str = Field(
+        ...,
+        description="Destination landmark ID or display name (e.g. 'bedroom')",
+        json_schema_extra={"example": "bedroom"},
+    )
+
+
+class MarkerRouteRequest(BaseModel):
+    """Request DTO for finding indoor route from a scanned ArUco marker ID."""
+
+    marker_id: int = Field(
+        ...,
+        description="Scanned ArUco marker identifier (e.g. 10)",
+        json_schema_extra={"example": 10},
+    )
+    destination: str = Field(
+        ...,
+        description="Target destination landmark name",
+        json_schema_extra={"example": "bedroom"},
+    )
+
+
+class IndoorRouteResponse(BaseModel):
+    """Response DTO containing computed indoor route and sequential instructions."""
+
+    start: str
+    destination: str
+    route: List[str]
+    route_nodes: Optional[List[str]] = None
+    instructions: List[str]
+    total_steps: Optional[int] = None
+    start_marker_id: Optional[int] = None
+    location_source: Optional[str] = None
+    status: str = "success"
+
+
+class IndoorMapResponse(BaseModel):
+    """Response DTO for indoor floor plan landmark configuration."""
+
+    locations: Dict[str, str]
+    marker_locations: Dict[int, str]
+    note: str
+    connections: Optional[Dict[str, List[str]]] = None

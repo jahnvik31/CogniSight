@@ -1,7 +1,7 @@
 import queue
 import threading
 import time
-from typing import Optional
+from typing import List, Optional
 from app.config.settings import settings
 from app.utils.logging_config import logger
 
@@ -112,8 +112,37 @@ class VoiceAssistant:
         announcement = f"Successfully enrolled {name}{rel_str} into CogniSight memory!"
         return self.speak(announcement, force=True)
 
+    def speak_sequence(self, utterances: List[str], force: bool = True) -> int:
+        """Enqueues an ordered sequence of spoken announcements (e.g. route directions).
+
+        Using force=True (default) ensures consecutive route steps are not discarded
+        by the rate-limiting cooldown timer.
+
+        Args:
+            utterances: List of sentences to be spoken sequentially.
+            force: Whether to bypass rate-limiting cooldown. Defaults to True.
+
+        Returns:
+            int: Number of utterances successfully queued.
+        """
+        count = 0
+        for text in utterances:
+            if self.speak(text, force=force):
+                count += 1
+        return count
+
+    def clear_queue(self):
+        """Clears any pending queued utterances from speech synthesis buffer."""
+        while not self.speech_queue.empty():
+            try:
+                self.speech_queue.get_nowait()
+                self.speech_queue.task_done()
+            except (queue.Empty, ValueError):
+                break
+
     def stop(self):
         """Stops background worker thread."""
+        self.clear_queue()
         self.stop_event.set()
         if self.worker_thread and self.worker_thread.is_alive():
             self.worker_thread.join(timeout=1.0)

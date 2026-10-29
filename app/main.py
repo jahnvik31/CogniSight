@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 from app.api.routes import router as api_router
+from app.api.indoor_routes import router as indoor_router
 from app.camera.camera import Camera
 from app.config.settings import settings
 from app.database.database import SessionLocal, init_db
@@ -48,6 +49,7 @@ app.add_middleware(
 
 # Mount API v1 router
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(indoor_router, prefix="/api/v1")
 
 
 def generate_video_stream():

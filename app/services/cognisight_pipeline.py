@@ -1,4 +1,5 @@
 from typing import Optional, Tuple
+import time
 import cv2
 import numpy as np
 from sqlalchemy.orm import Session
@@ -45,6 +46,10 @@ class CogniSightPipeline:
         self.voice_assistant = (
             voice_assistant if voice_assistant is not None else VoiceAssistant()
         )
+        self._unknown_announced = False
+        self._last_announced_person_id: Optional[int] = None
+        self._no_person_since = None
+        self._unknown_reset_seconds = 5.0
 
     def process_frame_full_pipeline(
         self, frame: np.ndarray, db: Session, speak_voice: bool = True
@@ -67,8 +72,43 @@ class CogniSightPipeline:
         CogniSightPipeline._latest_context = context_state
 
         # 3. Voice Assistance: Speak context announcement (with cooldown throttling)
-        if speak_voice and context_state.spoken_announcement:
-            self.voice_assistant.speak(context_state.spoken_announcement)
+        
+        # 3. Voice Assistance: Announce an unknown person only once
+        # until the scene clears or a known person is recognized.
+        now = time.monotonic()
+
+        if context_state.recognized:
+            # A known person is visible; allow a future unknown-person alert.
+            self._unknown_announced = False
+            self._no_person_since = None
+
+            # Announce recognized person ONCE per interaction session; do not repeat continuously
+            if speak_voice and context_state.spoken_announcement:
+                if context_state.person_id != self._last_announced_person_id:
+                    self.voice_assistant.speak(
+                        context_state.spoken_announcement,
+                        force=True,
+                    )
+                    self._last_announced_person_id = context_state.person_id
+
+        elif recognition_results:
+            # A person is visible but their face is not recognized.
+            self._no_person_since = None
+
+            if speak_voice and not self._unknown_announced:
+                self.voice_assistant.speak(
+                    context_state.spoken_announcement
+                )
+                self._unknown_announced = True
+
+        else:
+            # No face detected. Wait 5s before resetting, so momentary
+            # camera dropouts or head turns won't repeat the announcement.
+            if self._no_person_since is None:
+                self._no_person_since = now
+            elif now - self._no_person_since >= self._unknown_reset_seconds:
+                self._unknown_announced = False
+                self._last_announced_person_id = None
 
         # 4. Render visual overlays
         annotated_frame = self.recognizer.draw_recognition(frame, recognition_results)

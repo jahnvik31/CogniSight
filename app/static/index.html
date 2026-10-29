@@ -159,6 +159,62 @@
                             <i class="fa-solid fa-spinner fa-spin me-1"></i> <span id="micStatusText">Listening to your voice... Speak your name and relationship (e.g. "My name is Suresh and I am a Caregiver")</span>
                         </div>
                     </div>
+
+                    <!-- Module 2: Integrated Live Indoor Navigation HUD -->
+                    <div id="indoorNavHud" class="p-3 mt-3 rounded border" style="background: #0f172a; border-color: #334155 !important;">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge" id="navStateBadge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.75rem;">
+                                    <i class="fa-solid fa-compass me-1"></i> INDOOR NAVIGATION
+                                </span>
+                                <span class="small fw-semibold text-slate-200" id="navStatusHeadline">
+                                    <i class="fa-solid fa-camera text-muted me-1"></i> Show location marker to camera or click 'Speak Destination'...
+                                </span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <button class="btn btn-sm btn-outline-danger d-none" id="cancelNavBtn" onclick="cancelIndoorNavigation()">
+                                    <i class="fa-solid fa-xmark me-1"></i> Cancel Route
+                                </button>
+                                <button class="btn btn-sm btn-danger fw-bold d-flex align-items-center gap-1 shadow-sm" id="manualVoiceDestBtn" onclick="triggerVoiceDestinationDirectly()" title="Click to Speak Destination">
+                                    <i class="fa-solid fa-microphone"></i> <span>Speak Destination</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Live Voice Transcript & Microphone Banner -->
+                        <div id="voiceTranscriptBanner" class="mt-2 p-2 rounded small d-none" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #fca5a5;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fa-solid fa-microphone-lines pulse-mic me-1 text-danger"></i>
+                                    <span id="voiceTranscriptText" class="fw-semibold">Listening now... Speak your destination (Bedroom, Dining room, Corridor, Entrance)</span>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-link text-white-50 p-0 text-decoration-none" onclick="stopDestinationListening()">Cancel</button>
+                            </div>
+                        </div>
+
+                        <!-- Quick Destination Selection Chips -->
+                        <div id="navQuickChips" class="mt-2 pt-2 border-top border-secondary d-flex flex-wrap align-items-center gap-2">
+                            <span class="small text-muted me-1">Or Quick Select:</span>
+                            <button type="button" class="btn btn-sm btn-outline-light py-1 px-2 fw-semibold" onclick="selectDestinationManually('bedroom', 'Bedroom')">🛏️ Bedroom</button>
+                            <button type="button" class="btn btn-sm btn-outline-light py-1 px-2 fw-semibold" onclick="selectDestinationManually('dining_room', 'Dining room')">🍽️ Dining Room</button>
+                            <button type="button" class="btn btn-sm btn-outline-light py-1 px-2 fw-semibold" onclick="selectDestinationManually('corridor', 'Main corridor')">🚶 Corridor</button>
+                            <button type="button" class="btn btn-sm btn-outline-light py-1 px-2 fw-semibold" onclick="selectDestinationManually('entrance', 'Entrance')">🚪 Entrance</button>
+                            <span id="selectedDestPill" class="badge bg-secondary ms-auto d-none">Destination: None</span>
+                        </div>
+
+                        <!-- Active Step-by-Step Navigation Progress -->
+                        <div id="navProgressSection" class="mt-2 pt-2 border-top border-secondary d-none">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small fw-bold text-emerald-400" id="navStepInstruction">
+                                    Follow the mapped route to Main corridor.
+                                </span>
+                                <span class="badge bg-primary" id="navStepCounter">Step 1 of 2</span>
+                            </div>
+                            <div class="small text-muted" id="navRouteBreadcrumbs">
+                                Entrance ➔ Main corridor ➔ Bedroom
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -270,6 +326,7 @@
         let audioEnabled = true;
         let lastSpokenText = "";
         let lastSpokenTime = 0;
+        let voiceEnrollmentActive = false;
         const REMINDER_INTERVAL_MS = 30000;
 
         function speakText(text, force = false, onEndCallback = null) {
@@ -294,13 +351,21 @@
             try {
                 window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(text);
+                window._activeUtterance = utterance; // Prevent Chrome V8 garbage collection
                 utterance.rate = 1.0;
                 utterance.volume = 1.0;
 
-                if (onEndCallback) {
-                    utterance.onend = onEndCallback;
-                    utterance.onerror = onEndCallback;
-                }
+                let callbackFired = false;
+                const fireCallback = () => {
+                    if (!callbackFired) {
+                        callbackFired = true;
+                        if (onEndCallback) onEndCallback();
+                    }
+                };
+
+                utterance.onend = fireCallback;
+                utterance.onerror = fireCallback;
+                setTimeout(fireCallback, 3000); // safety fallback
 
                 window.speechSynthesis.speak(utterance);
                 console.log("🔊 Browser Web Speech Synthesis Speaking:", text);
@@ -344,6 +409,7 @@
 
         // Voice Audio Microphone Speech Recognition for Unknown Person Enrollment
         function startVoiceEnrollment() {
+            if (voiceEnrollmentActive) return;
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
                 alert("Speech recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.");
@@ -353,6 +419,7 @@
             const alertBox = document.getElementById('micStatusAlert');
             const alertText = document.getElementById('micStatusText');
             const micBtn = document.getElementById('voiceEnrollBtn');
+            voiceEnrollmentActive = true;
 
             alertBox.classList.remove('d-none');
             micBtn.classList.add('pulse-mic');
@@ -399,6 +466,7 @@
 
                     if (!transcriptToSend) {
                         alertText.innerText = "No voice heard. Please click 'Speak Name & Enroll' again.";
+                        voiceEnrollmentActive = false;
                         setTimeout(() => {
                             alertBox.classList.add('d-none');
                             micBtn.classList.remove('pulse-mic');
@@ -427,13 +495,15 @@
                         }
                     } catch (err) {
                         alert("Error submitting voice enrollment: " + err);
-                    } finally {
-                        alertBox.classList.add('d-none');
-                        micBtn.classList.remove('pulse-mic');
-                    }
+                   } finally {
+    voiceEnrollmentActive = false;
+    alertBox.classList.add('d-none');
+    micBtn.classList.remove('pulse-mic');
+}
                 };
 
                 recognition.onerror = function(event) {
+                    voiceEnrollmentActive = false;
                     console.error("Microphone recognition error:", event.error);
                     alertText.innerText = `Microphone error: ${event.error}`;
                     setTimeout(() => {
@@ -622,6 +692,8 @@
         }
 
         let lastUnknownPromptTime = 0;
+        let lastAnnouncedPersonId = null;
+        let lastPersonSeenTimestamp = 0;
 
         async function pollContext() {
             try {
@@ -640,20 +712,29 @@
                 }
 
                 if (data.headline === "Unknown Person Detected") {
-                    headlineEl.style.color = "#f59e0b"; // Amber warning
+                    headlineEl.style.color = "#f59e0b";
                     const now = Date.now();
-                    if (now - lastUnknownPromptTime > 15000) {
+                    if (!voiceEnrollmentActive && now - lastUnknownPromptTime > 20000) {
                         lastUnknownPromptTime = now;
                         speakText("An unknown person is standing in front of you. Please click Speak Name and Enroll to register.", true);
                     }
                 } else if (data.recognized) {
-                    headlineEl.style.color = "#34d399"; // Emerald green
-                    if (data.spoken_announcement) {
-                        speakText(data.spoken_announcement);
+                    headlineEl.style.color = "#34d399";
+                    lastPersonSeenTimestamp = Date.now();
+
+                    // Announce recognized person ONCE per interaction session; do not repeat again and again
+                    if (!voiceEnrollmentActive && data.spoken_announcement && data.person_id !== lastAnnouncedPersonId) {
+                        speakText(data.spoken_announcement, true);
+                        lastAnnouncedPersonId = data.person_id;
                     }
                 } else {
-                    headlineEl.style.color = "#94a3b8"; // Slate default
+                    headlineEl.style.color = "#94a3b8";
+                    // Reset announced person only after they have left view for over 6 seconds
+                    if (Date.now() - lastPersonSeenTimestamp > 6000) {
+                        lastAnnouncedPersonId = null;
+                    }
                 }
+
             } catch (err) {
                 console.error("Context poll error:", err);
             }
@@ -666,10 +747,416 @@
             }
         }
 
+        // =========================================================================
+        // Module 2: Autonomous Indoor Navigation (Auto Marker Detection + Voice)
+        // =========================================================================
+
+        let navSession = {
+            active: false,
+            currentLocation: null,
+            currentMarkerId: null,
+            destination: null,
+            destinationName: null,
+            route: [],          // canonical keys e.g. ["entrance", "corridor", "bedroom"]
+            routeNames: [],     // display names e.g. ["Entrance", "Main corridor", "Bedroom"]
+            nextExpectedIndex: 1, // index in route array we must see next
+            isPrompting: false,
+            lastPromptedLocation: null,
+            lastPromptedTime: 0,
+        };
+
+        // Continuously poll live camera feed for ArUco markers automatically
+        async function autoScanMarkerLoop() {
+            try {
+                const res = await fetch("/api/v1/indoor/scan-current-location");
+                if (!res.ok) return;
+                const data = await res.json();
+
+                if (data.detected && data.location) {
+                    handleMarkerAutoDetected(data.marker_id, data.location, data.display_name);
+                } else {
+                    if (!navSession.active && !navSession.isPrompting) {
+                        document.getElementById("navStatusHeadline").innerHTML = 
+                            `<i class="fa-solid fa-camera text-muted me-1"></i> Show location marker to camera (Entrance, Corridor, Dining Room, Bedroom)...`;
+                    }
+                }
+            } catch (e) {
+                // silent background catch
+            }
+        }
+
+        // Handler when marker is recognized in camera view
+        async function handleMarkerAutoDetected(markerId, locationKey, displayName) {
+            const now = Date.now();
+
+            // 1. If currently navigating a route
+            if (navSession.active) {
+                const expectedNextKey = navSession.route[navSession.nextExpectedIndex];
+
+                // Check if user physically reached the next expected landmark marker
+                if (locationKey === expectedNextKey) {
+                    navSession.currentLocation = locationKey;
+                    navSession.currentMarkerId = markerId;
+                    navSession.nextExpectedIndex++;
+
+                    const isFinal = (navSession.nextExpectedIndex >= navSession.route.length);
+
+                    if (isFinal) {
+                        // Reached Destination!
+                        const arrivalMsg = `You have arrived at your destination: ${displayName}.`;
+                        speakText(arrivalMsg, true);
+
+                        document.getElementById("navStatusHeadline").innerHTML = 
+                            `<span class="text-success fw-bold"><i class="fa-solid fa-circle-check me-1"></i> Destination Reached: ${displayName}!</span>`;
+                        document.getElementById("navStepInstruction").innerText = arrivalMsg;
+                        document.getElementById("navStepCounter").className = "badge bg-success";
+                        document.getElementById("navStepCounter").innerText = "ARRIVED";
+
+                        setTimeout(() => {
+                            cancelIndoorNavigation(false);
+                        }, 7000);
+                    } else {
+                        // Reached Intermediate Landmark! Speak next step ONLY now!
+                        const nextTargetName = navSession.routeNames[navSession.nextExpectedIndex];
+                        const stepMsg = `${displayName} reached. Continue toward ${nextTargetName}.`;
+
+                        speakText(stepMsg, true);
+
+                        document.getElementById("navStatusHeadline").innerHTML = 
+                            `<span class="text-emerald-400 fw-bold"><i class="fa-solid fa-location-dot me-1"></i> Reached ${displayName}</span>`;
+                        document.getElementById("navStepInstruction").innerText = 
+                            `Continue toward ${nextTargetName}. (Show ${nextTargetName} marker when you reach it)`;
+                        document.getElementById("navStepCounter").innerText = 
+                            `Step ${navSession.nextExpectedIndex} of ${navSession.route.length - 1}`;
+                    }
+                    return;
+                }
+
+                // If camera still sees current landmark, stay quiet (wait until next marker is reached)
+                if (locationKey === navSession.currentLocation) {
+                    return;
+                }
+                return;
+            }
+
+            // 2. Not navigating: Prompt for destination when a marker is first identified
+            if (navSession.isPrompting) return;
+
+            // Debounce so the same stationary marker doesn't prompt repeatedly
+            if (navSession.lastPromptedLocation === locationKey && now - navSession.lastPromptedTime < 30000) {
+                return;
+            }
+
+            navSession.currentLocation = locationKey;
+            navSession.currentMarkerId = markerId;
+            navSession.lastPromptedLocation = locationKey;
+            navSession.lastPromptedTime = now;
+
+            document.getElementById("navStatusHeadline").innerHTML = 
+                `<span class="text-warning fw-bold"><i class="fa-solid fa-location-dot me-1"></i> ${displayName} identified. Where would you like to go?</span>`;
+
+            promptDestinationForLocation(displayName);
+        }
+
+        // Audio tone synthesizer for instant microphone feedback
+        function playChime(freq = 700, type = 'sine', duration = 0.15) {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        // Dedicated helper to parse speech into canonical destination key
+        function matchSpokenDestination(text) {
+            if (!text) return null;
+            const cleaned = text.toLowerCase().trim();
+
+            if (cleaned.includes("bed") || cleaned.includes("sleep") || cleaned.includes("badroom") || cleaned.includes("room")) return "bedroom";
+            if (cleaned.includes("din") || cleaned.includes("eat") || cleaned.includes("food") || cleaned.includes("lunch") || cleaned.includes("dinner") || cleaned.includes("kitchen") || cleaned.includes("mess") || cleaned.includes("table")) return "dining_room";
+            if (cleaned.includes("corridor") || cleaned.includes("coridor") || cleaned.includes("hall") || cleaned.includes("pass") || cleaned.includes("walk") || cleaned.includes("way")) return "corridor";
+            if (cleaned.includes("enter") || cleaned.includes("entrance") || cleaned.includes("door") || cleaned.includes("front") || cleaned.includes("gate") || cleaned.includes("exit")) return "entrance";
+            return null;
+        }
+
+        // Direct user-gesture click handler to activate microphone synchronously
+        function triggerVoiceDestinationDirectly() {
+            // Cancel TTS to prevent microphone picking up synthetic voice
+            window.speechSynthesis.cancel();
+            playChime(750, 'sine', 0.12);
+            startDestinationListening();
+        }
+
+        function stopDestinationListening() {
+            if (window._destRecognition) {
+                try { window._destRecognition.stop(); } catch(e) {}
+            }
+            const banner = document.getElementById("voiceTranscriptBanner");
+            if (banner) banner.classList.add("d-none");
+            navSession.isPrompting = false;
+        }
+
+        // Listen for spoken destination using Web Speech API with real-time feedback
+        function startDestinationListening() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const banner = document.getElementById("voiceTranscriptBanner");
+            const bannerText = document.getElementById("voiceTranscriptText");
+            const micBtn = document.getElementById("manualVoiceDestBtn");
+
+            if (!SpeechRecognition) {
+                if (banner) {
+                    banner.classList.remove("d-none");
+                    bannerText.innerHTML = "Speech recognition is not supported in this browser. Please tap a room button below.";
+                }
+                navSession.isPrompting = false;
+                return;
+            }
+
+            // Stop existing instance
+            if (window._destRecognition) {
+                try { window._destRecognition.stop(); } catch(e) {}
+            }
+
+            const recognition = new SpeechRecognition();
+            window._destRecognition = recognition;
+            recognition.lang = 'en-US';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 2;
+
+            if (banner) {
+                banner.classList.remove("d-none");
+                bannerText.innerHTML = `<b>🎙️ LISTENING NOW...</b> Speak your destination (Bedroom, Dining room, Corridor, Entrance)`;
+            }
+            if (micBtn) micBtn.classList.add("pulse-mic");
+            navSession.isPrompting = true;
+
+            let destinationMatched = false;
+            let silenceTimer = null;
+
+            recognition.onresult = function(event) {
+                let heard = "";
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    heard += event.results[i][0].transcript.toLowerCase() + " ";
+                }
+                heard = heard.trim();
+                console.log("🎤 Live destination transcript heard:", heard);
+
+                if (bannerText && !destinationMatched) {
+                    bannerText.innerHTML = `🎙️ Heard: "<b>${heard}</b>"... (Speak Bedroom, Dining room, Corridor, or Entrance)`;
+                }
+
+                const matchedKey = matchSpokenDestination(heard);
+                if (matchedKey && !destinationMatched) {
+                    destinationMatched = true;
+                    playChime(1100, 'triangle', 0.25); // Success tone
+                    try { recognition.stop(); } catch(e) {}
+
+                    if (bannerText) {
+                        const displayDest = matchedKey.replace('_', ' ').toUpperCase();
+                        bannerText.innerHTML = `✅ <span class="text-white fw-bold">Destination Matched: ${displayDest}!</span> Calculating route...`;
+                    }
+                    if (micBtn) micBtn.classList.remove("pulse-mic");
+
+                    setTimeout(() => {
+                        if (banner) banner.classList.add("d-none");
+                    }, 2500);
+
+                    // Update selected destination pill
+                    const destPill = document.getElementById("selectedDestPill");
+                    if (destPill) {
+                        destPill.classList.remove("d-none");
+                        destPill.innerText = `Destination: ${matchedKey.replace('_', ' ')}`;
+                    }
+
+                    navSession.destination = matchedKey;
+
+                    if (navSession.currentLocation) {
+                        computeAndStartRoute(navSession.currentLocation, matchedKey);
+                    } else {
+                        speakText(`${matchedKey.replace('_', ' ')} confirmed. Now show your starting landmark marker to the camera.`, true);
+                        document.getElementById("navStatusHeadline").innerHTML = 
+                            `<span class="text-warning fw-bold"><i class="fa-solid fa-camera me-1"></i> Destination: ${matchedKey.replace('_', ' ')}. Show location marker to start!</span>`;
+                    }
+                }
+
+                clearTimeout(silenceTimer);
+                silenceTimer = setTimeout(() => {
+                    try { recognition.stop(); } catch(e) {}
+                }, 4000);
+            };
+
+            recognition.onerror = function(err) {
+                console.warn("Speech destination error:", err.error);
+                if (bannerText) {
+                    if (err.error === 'not-allowed') {
+                        bannerText.innerHTML = `⚠️ Microphone permission blocked. Click 'Allow' in your browser address bar or tap a room below.`;
+                    } else if (err.error === 'no-speech') {
+                        bannerText.innerHTML = `No voice detected. Click 'Speak Destination' to try again or tap a room below.`;
+                    } else {
+                        bannerText.innerHTML = `Microphone notice: ${err.error}. Tap a room button below.`;
+                    }
+                }
+                navSession.isPrompting = false;
+                if (micBtn) micBtn.classList.remove("pulse-mic");
+            };
+
+            recognition.onend = function() {
+                navSession.isPrompting = false;
+                if (micBtn) micBtn.classList.remove("pulse-mic");
+            };
+
+            try {
+                recognition.start();
+                console.log("🎙️ SpeechRecognition started successfully.");
+            } catch(e) {
+                console.warn("Could not start SpeechRecognition:", e);
+                navSession.isPrompting = false;
+                if (micBtn) micBtn.classList.remove("pulse-mic");
+            }
+        }
+
+        // Voice prompt asking where user wants to go when a marker is detected
+        function promptDestinationForLocation(locationDisplayName) {
+            if (navSession.isPrompting) return;
+
+            // If a destination was already pre-selected, immediately compute route!
+            if (navSession.destination && navSession.destination !== navSession.currentLocation) {
+                computeAndStartRoute(navSession.currentLocation, navSession.destination);
+                return;
+            }
+
+            const micBtn = document.getElementById("manualVoiceDestBtn");
+            if (micBtn) micBtn.classList.add("pulse-mic");
+
+            // Speak audio prompt
+            speakText(`${locationDisplayName} identified. Where would you like to go?`, true);
+
+            // Attempt seamless listening if browser allows, otherwise user clicks button
+            setTimeout(() => {
+                try {
+                    startDestinationListening();
+                } catch(e) {
+                    console.log("Background recognition deferred to user tap:", e);
+                }
+            }, 1400);
+        }
+
+        function selectDestinationManually(destKey, destName) {
+            navSession.destination = destKey;
+            
+            const destPill = document.getElementById("selectedDestPill");
+            if (destPill) {
+                destPill.classList.remove("d-none");
+                destPill.innerText = `Destination: ${destName}`;
+            }
+
+            if (!navSession.currentLocation) {
+                speakText(`${destName} selected. Please show your starting landmark marker to the camera.`, true);
+                const headlineEl = document.getElementById("navStatusHeadline");
+                if (headlineEl) {
+                    headlineEl.innerHTML = `<span class="text-warning fw-bold"><i class="fa-solid fa-qrcode me-1"></i> Destination: ${destName}. Show location marker (10, 20, 30, 40) to camera.</span>`;
+                }
+                return;
+            }
+
+            computeAndStartRoute(navSession.currentLocation, destKey);
+        }
+
+        // Calculate route and speak ONLY immediate next step
+        async function computeAndStartRoute(startKey, destKey) {
+            if (!startKey || !destKey) return;
+
+            if (startKey === destKey) {
+                speakText(`You are already at your destination: ${destKey.replace('_', ' ')}.`, true);
+                return;
+            }
+
+            try {
+                const res = await fetch("/api/v1/indoor/route", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({start: startKey, destination: destKey})
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    speakText("No walkable route connects these locations.", true);
+                    return;
+                }
+
+                navSession.active = true;
+                navSession.destination = destKey;
+                navSession.destinationName = data.destination;
+                navSession.route = data.route_nodes;
+                navSession.routeNames = data.route;
+                navSession.nextExpectedIndex = 1;
+
+                // Display HUD Progress
+                document.getElementById("cancelNavBtn").classList.remove("d-none");
+                document.getElementById("navProgressSection").classList.remove("d-none");
+                document.getElementById("navStepCounter").className = "badge bg-primary";
+                document.getElementById("navStepCounter").innerText = `Step 1 of ${data.route_nodes.length - 1}`;
+                document.getElementById("navRouteBreadcrumbs").innerText = data.route.join("  ➔  ");
+
+                // Speak ONLY immediate next instruction! Wait for next marker before continuing!
+                const nextStepName = data.route[1];
+                const instructionText = `Navigating to ${data.destination}. Follow the mapped route to ${nextStepName}.`;
+                speakText(instructionText, true);
+
+                document.getElementById("navStatusHeadline").innerHTML = 
+                    `<span class="text-emerald-400 fw-bold"><i class="fa-solid fa-route me-1"></i> Route to ${data.destination}</span>`;
+                document.getElementById("navStepInstruction").innerText = 
+                    `Follow the mapped route to ${nextStepName}. (Show ${nextStepName} marker when you reach it)`;
+
+            } catch (err) {
+                console.error("Route calculation error:", err);
+            }
+        }
+
+        function cancelIndoorNavigation(speak = true) {
+            navSession.active = false;
+            navSession.destination = null;
+            navSession.route = [];
+            navSession.routeNames = [];
+            navSession.nextExpectedIndex = 1;
+            navSession.isPrompting = false;
+
+            stopDestinationListening();
+
+            const destPill = document.getElementById("selectedDestPill");
+            if (destPill) {
+                destPill.classList.add("d-none");
+                destPill.innerText = "Destination: None";
+            }
+
+            document.getElementById("cancelNavBtn").classList.add("d-none");
+            document.getElementById("navProgressSection").classList.add("d-none");
+            document.getElementById("navStatusHeadline").innerHTML = 
+                `<i class="fa-solid fa-camera text-muted me-1"></i> Show location marker to camera or click 'Speak Destination'...`;
+
+            if (speak) {
+                speakText("Navigation canceled.", true);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             fetchPersons();
             pollContext();
             setInterval(pollContext, 1500);
+
+            // Start continuous automatic marker scanning loop
+            setInterval(autoScanMarkerLoop, 1500);
         });
     </script>
 </body>
