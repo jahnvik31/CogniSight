@@ -123,7 +123,7 @@ The current [validation record](docs/VALIDATION.md) is authoritative:
 - Official Caddy 2.11.9 validates the example configuration locally; actual Pi/phone certificate trust and service operation remain pending.
 - The next-steps PDF is generated from the runbook and visually inspected. Regenerate it after changing the guide.
 
-The shell still cannot resolve GitHub; a failed push is not an authentication request or a successful publication. Remote CI is not claimed. The only local software skip is the sandbox denying a real TCP listener. The next contributor must rerun on the actual Pi rather than inherit Mac test results as hardware acceptance.
+The shell still cannot resolve GitHub, but the release branch was pushed using authenticated Git transport through the browser network, and [PR #13](https://github.com/jahnvik31/CogniSight/pull/13) is the required integration path. GitHub Actions passed its skip-rejecting software gate for `2341b42`; see validation for the run link and check the latest PR-head result. Main requires a PR, so logging in again does not permit a direct main push. The next contributor must still rerun on the actual Pi rather than inherit Mac/CI test results as hardware acceptance.
 
 From the checkout:
 

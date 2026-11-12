@@ -46,7 +46,7 @@ A local **cognisight-0.1.0-py3-none-any.whl** builds with Python 3.12/setuptools
 
 The official **Caddy 2.11.9 mac arm64** archive was checked against its published release checksum. `caddy validate` successfully accepts `deploy/Caddyfile.example` with a synthetic hostname/private-network binding configuration. `caddy fmt` normalizes the file. Its redundant explicit forwarding-header warning is nonblocking; upstream host/IP trust remains restricted by Waitress. No server listener, phone certificate installation or physical Pi Caddy service is claimed. Actual device/phone deployment remains pending.
 
-`.github/workflows/software-checks.yml` uses Python 3.11/Node 24, installs web/vision test dependencies, rejects any skipped software tests, runs the Node checks, builds a wheel and checks shipped assets. It has read-only repository permissions. **The remote workflow has not run in this session.** Check it after a successful push; local package success is not remote CI success.
+`.github/workflows/software-checks.yml` uses Python 3.11/Node 24, installs web/vision test dependencies, rejects any skipped software tests, runs the Node checks, builds a wheel and checks shipped assets. It has read-only repository permissions. **GitHub Actions software checks passed for commit `2341b42`** on the release branch: [successful run](https://github.com/jahnvik31/CogniSight/actions/runs/43267509618). That job rejects skips, so its Linux transport check and package gate ran successfully. The latest PR-head checks must also pass before merging. Local package success and remote CI are separate evidence.
 
 ## Defects reproduced and fixed
 
@@ -64,7 +64,7 @@ The official **Caddy 2.11.9 mac arm64** archive was checked against its publishe
 3. Exact SIMA7670C/RS232 carrier/manual, genuine GNSS capability/interface and actual valid local GPSD fixes. Leave navigation disabled until verified; no guessed wiring/AT commands.
 4. Same-Wi-Fi phone with trusted Caddy public root, actual HTTPS login/logout/expiry/source loss/recovery and LAN reachability.
 5. Held-out recognition accuracy/calibration, genuine position/voice latency, accessibility, offline operation, reconnect and two-hour combined thermal/memory/load measurements.
-6. The sandbox-blocked loopback listener check, an actual remote GitHub push and successful remote CI. These are environment/external-service gates, not unfinished feature implementation.
+6. The Mac sandbox still skips its local loopback listener check, but the skip-rejecting Linux CI job passed. The release branch was pushed and [PR #13](https://github.com/jahnvik31/CogniSight/pull/13) opened because repository rules require a PR into main. Check the latest PR/merge status; shell DNS restrictions are not an authentication failure.
 
 ## Contributor deliverables
 

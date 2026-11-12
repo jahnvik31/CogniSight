@@ -69,4 +69,4 @@ node --test tests/dashboard.test.cjs
 GitHub Actions installs the web/vision test dependencies and rejects skipped
 software checks. Local wheel building, real Flask/Waitress integration and OpenCV image-quality checks
 have passed; see [validation](docs/VALIDATION.md) for the exact environment and one
-sandbox socket skip. Remote CI remains pending until the workflow actually runs. Native Pi and phone acceptance is a separate requirement.
+sandbox socket skip. [GitHub software CI passed](https://github.com/jahnvik31/CogniSight/actions/runs/43267509618) for release commit `2341b42`; check the latest PR-head run too. Native Pi and phone acceptance is a separate requirement.
