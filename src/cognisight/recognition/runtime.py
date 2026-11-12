@@ -110,7 +110,21 @@ class Runtime:
 
     def dashboard_snapshot(self):
         """Read-only projection; no camera reads, embeddings, or device controls."""
-        with self.lock:
+        acquired = self.lock.acquire(timeout=0.05)
+        try:
+            if not acquired:
+                return self._dashboard_with_outdoor(
+                    {
+                        "status": "unavailable",
+                        "reason": "recognition_busy",
+                        "data_source": "unavailable",
+                        "people": [],
+                        "observed_at": None,
+                        "age_seconds": None,
+                        "max_age_seconds": 1,
+                    },
+                    {"runtime": "busy"},
+                )
             now = max(self.now, self.clock())
             age = (
                 None if self.observed_monotonic is None else max(0.0, now - self.observed_monotonic)
@@ -157,6 +171,12 @@ class Runtime:
                 "max_age_seconds": 1,
             }
             health = dict(self.health)
+        finally:
+            if acquired:
+                self.lock.release()
+        return self._dashboard_with_outdoor(recognition, health)
+
+    def _dashboard_with_outdoor(self, recognition, health):
         outdoor = {
             "status": "unavailable",
             "reason": "not_configured",

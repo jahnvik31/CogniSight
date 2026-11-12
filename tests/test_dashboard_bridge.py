@@ -56,3 +56,33 @@ class BridgeTests(unittest.TestCase):
         state = self.runtime.dashboard_snapshot()
         self.assertEqual(state["outdoor"]["status"], "unavailable")
         self.assertEqual(state["recognition"]["status"], "live")
+
+    def test_busy_recognition_does_not_block_independent_gps_snapshot(self):
+        import threading
+        import time
+
+        class Navigation:
+            def snapshot(self):
+                return {"status": "live", "data_source": "live", "latitude": 0.0, "longitude": 0.0}
+
+        self.runtime.navigation = Navigation()
+        held, release = threading.Event(), threading.Event()
+
+        def hold_detector_lock():
+            with self.runtime.lock:
+                held.set()
+                release.wait(0.5)
+
+        worker = threading.Thread(target=hold_detector_lock)
+        worker.start()
+        self.assertTrue(held.wait(0.5))
+        started = time.monotonic()
+        try:
+            state = self.runtime.dashboard_snapshot()
+            elapsed = time.monotonic() - started
+        finally:
+            release.set()
+            worker.join()
+        self.assertLess(elapsed, 0.2)
+        self.assertEqual(state["recognition"]["status"], "unavailable")
+        self.assertEqual(state["outdoor"]["status"], "live")
