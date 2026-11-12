@@ -39,6 +39,20 @@ Module owners are responsible for their implementations, tests, and documentatio
 - Explain the changes and testing performed.
 - Wait for review and approval before merging.
 
+### Explicit authorization for the current release
+
+On 12 November 2026, Jahnvi explicitly authorized completing the remaining
+software work, committing as `jahnvik31 <jahnvikotangale@gmail.com>`, and pushing
+the finished release directly to `main`. This narrow instruction supersedes the
+PR-only steps above for this release. Never force-push, infer successful remote
+publication from local commits, or treat this as permission for unrelated future
+releases. The normal PR workflow still applies afterward.
+
+Read [NEXT_AGENT_README.md](NEXT_AGENT_README.md), [validation](docs/VALIDATION.md)
+and the [Pi runbook](docs/hardware/PI-RUNBOOK.md) before continuing. Indoor issue
+#5 remains deferred. Software implementation of #6/#7 is present; #8 covers the
+available-module integration. Hardware acceptance still requires real devices.
+
 ## Integration Rules
 
 - Do not merge entire existing module repositories blindly.

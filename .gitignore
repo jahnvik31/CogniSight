@@ -151,6 +151,8 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/
@@ -218,3 +220,43 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Private recognition state and downloaded models
+.superpowers/
+models/
+qualification-private/
+*.sqlite3*
+*.db*
+*.onnx
+*.wav
+
+# Local device configuration; commit only the reviewed examples.
+/config.json
+/deploy/Caddyfile
+/Caddyfile
+
+# Private runtime/evaluation exports accidentally copied into the checkout.
+# Normal runtime state belongs outside this repository (enforced by the CLI).
+/data/
+/state/
+/recordings/
+/captures/
+/faces/
+/embeddings/
+password.hash
+session.key
+service.lock
+
+# Local TLS keys and Caddy certificate/account state.
+*.key
+/caddy-data/
+/caddy-config/
+/.local/share/caddy/
+/.config/caddy/
+
+# Local source transfers and browser previews.
+.source-commit
+*.bundle
+/cognisight-code*.tar.gz
+.playwright-mcp/
+.DS_Store

@@ -1,0 +1,20 @@
+{
+	# The phone must navigate directly to HTTPS; do not serve HTTP enrollment.
+	auto_https disable_redirects
+}
+
+# Set both environment variables to this Pi's exact LAN hostname and IP.
+# COGNISIGHT_HOST=cognisight.local COGNISIGHT_LAN_IP=192.168.1.20
+{$COGNISIGHT_HOST} {
+	bind {$COGNISIGHT_LAN_IP}
+	tls internal
+
+	@outside not remote_ip private_ranges
+	respond @outside "LAN access only" 403
+
+	reverse_proxy 127.0.0.1:8766 {
+		# Exactly one local proxy; replace client-supplied forwarding headers.
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-For {remote_host}
+	}
+}

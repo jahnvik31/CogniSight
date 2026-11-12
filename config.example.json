@@ -1,0 +1,25 @@
+{
+  "model_version": "sface:REPLACE_WITH_RECOGNIZER_SHA256_FROM_MANIFEST",
+  "detector_model": "models/face_detection_yunet_2023mar.onnx",
+  "recognizer_model": "models/face_recognition_sface_2021dec.onnx",
+  "vosk_model": "models/vosk-model-small-en-us-0.15",
+  "piper_model": "models/en_US-lessac-medium.onnx",
+  "manifest": "models/manifest.json",
+  "input_device": "USB REPLACE_WITH_EXACT_INPUT_DEVICE_NAME",
+  "output_device": "USB REPLACE_WITH_EXACT_OUTPUT_DEVICE_NAME",
+  "command_prefix": "computer",
+  "threshold": 0.6,
+  "margin": 0.08,
+  "calibrated": false,
+  "navigation": {
+    "enabled": false,
+    "gpsd_host": "127.0.0.1",
+    "gpsd_port": 2947,
+    "fix_max_age": 10
+  },
+  "caregiver": {
+    "enabled": false,
+    "allowed_hosts": [],
+    "backend_port": 8766
+  }
+}

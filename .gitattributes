@@ -1,0 +1,3 @@
+# Generated document/image artifacts must not be treated as line-oriented text.
+*.pdf binary
+*.png binary

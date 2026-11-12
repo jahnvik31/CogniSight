@@ -1,0 +1,157 @@
+# Unified system architecture and module interfaces — issue #6 approved plan
+
+**Status: user approved #6/#7 implementation and push to main on 12 November 2026. Software changes, contracts and rendered editable diagram are implemented; see ../architecture.md and ../VALIDATION.md. Physical acceptance and separate module-owner sign-off remain pending. The detailed proposal below records the original plan; its earlier no-push restrictions are superseded by that explicit user instruction.**
+
+Source: [GitHub issue #6](https://github.com/jahnvik31/CogniSight/issues/6), inspected 12 November 2026; repository `AGENTS.md`, `README.md`, actual recognition/navigation/caregiver source, deployment templates and validation/setup documents. This plan describes fresh work against the current checkout. **The user has deferred the entire indoor module (#5).** No indoor implementation is part of this phase.
+
+## Implemented software and remaining acceptance
+
+| Deliverable | Current state |
+| --- | --- |
+| Contracts, generated editable diagram and inspected view | Implemented: `CONTRACTS.md`, `../architecture.md` and diagram assets |
+| Stable event IDs, subscriber isolation and bounds | Implemented and regression-tested |
+| Capture-age freshness and bounded cached HTTP profiles | Implemented and regression-tested |
+| Speech ownership, partial-start and failed-owner cleanup | Implemented and regression-tested; actual device timing pending |
+| Operator handoff | Final `../hardware/PI-RUNBOOK.md`; real OS/native lock and device acceptance pending |
+
+The source findings and task breakdown below are the historical approved plan,
+not instructions to repeat completed implementation. Latest actual software
+checks are in [validation](../VALIDATION.md). Separate owner sign-off, if needed
+for the team's review process, is not inferred from the user's approval.
+
+## Goal and scope
+
+Document how the present system communicates, fix concrete shared-contract defects, and make its ownership/failure/freshness rules testable. Raspberry Pi 5 (8 GB) is the central offline device. The reported camera PCB is labeled Camera V2.0; its exact sensor, hidden camera-side contacts and cable compatibility remain unverified; the free end has 22 visible contacts. The wearer has AUX earphones/headset, not a USB headset. The existing USB-only audio implementation therefore requires a compatible USB sound adapter that is **not yet selected/owned†**; headset microphone presence and TRRS/CTIA compatibility must be verified. English speech remains the software target. Local GPSD can supply outdoor location/status only after positioning hardware is verified. One caregiver phone reads an authenticated HTTPS dashboard on the same Wi-Fi. One wearer/Pi and one caregiver credential remain the baseline.
+
+Keep the working modules, runtime, camera owner, GPSD worker, SQLite store, localhost HTTP servers and one AudioEngine. No new message broker, database, process framework, second speech queue, camera fan-out, indoor worker or capture/model split is needed for this phase. Indoor remains `unavailable/not_integrated`. Outdoor walking directions, emergency services, internet access and continuous indoor positioning are outside scope.
+
+#6 documents/enforces software contracts and supplies the architecture artifact. #7 qualifies actual Pi/camera/OS/native packages and deployment prerequisites. #8 validates real combined behavior and phone flows. A software pass cannot satisfy physical qualification. A final simple-English SSH guide follows approved implementation and known hardware facts; the sole draft instruction guide is `../hardware/PI-RUNBOOK-DRAFT.md`, with `RUNBOOK-OUTLINE.md` serving only as an editorial checklist.
+
+## Decisions and prerequisites
+
+The user/team must approve this complete plan before building because it touches shared interfaces; affected owners must agree before integration PRs merge. Public caregiver JSON stays schema 1. Proposed immutable internal records/adapters and focused fixes do not silently redefine existing module-local types as agreed global APIs.
+
+The diagram proposal uses neutral local-device shapes with numbered flows, a contracts panel and limitations panel. No input/reference images were supplied. No AWS services exist in the source, so no AWS region/VPC/cloud infrastructure will be invented. This scope is part of plan approval, not an additional approval round.
+
+User reports Raspberry Pi OS 64-bit and an Imager screenshot shows a 64-bit selection; that does not establish the installed release/runtime architecture. SSH username is `jahnvi`, hostname `cognisight`. Use `ssh jahnvi@cognisight.local` when mDNS resolves and an explicit `PI_IP` fallback placeholder otherwise. Before the final SSH/deployment guide, inspect the actual Pi OS release/runtime architecture and obtain board documentation and phone OS; the actual IP may remain a clearly marked placeholder. Never request a password in chat. These facts can remain pending while the software design is reviewed. Candidate OS/Python baseline is Bookworm 64-bit/Python 3.11, subject to #7 inspection; do not reinstall or upgrade an unknown device automatically.
+
+Reported positioning board: **“SIMA7670C MODULE WITH RS232.”** This may identify a cellular modem board; GNSS capability/output is unconfirmed. Keep `navigation.enabled=false` and GPSD setup disabled until the exact board/manual, positioning capability and compatible data path are verified. Do not relabel modem data as GPS or guess RS232/UART wiring, voltage, baud or AT commands. A photo showing 22 contacts at the free camera ribbon end does not identify the hidden camera end or prove correct cable orientation. #7 owns these hardware checks.
+
+## Original source findings before the implemented fixes
+
+| Component | What actually exists | #6 action |
+| --- | --- | --- |
+| `recognition/vision.py` | Single Picamera2 capture thread; owned BGR frame copies; capacity-1 latest mailbox with one consuming cursor; requested 640×480/15 fps; detection max four faces; model objects serialized by runtime | Document ownership and limits. Preserve one cursor/consumer because indoor is deferred. Requested rate is not measured performance. |
+| `recognition/runtime.py` | Owns Vision/AudioEngine/NavigationService lifecycle; enrollment and recognition serialize Vision access; recognition storage/model/camera failures retry while GPSD runs independently | Document current failure boundaries. Test GPS/status availability during recognition failure; no speculative rewrite. |
+| `recognition/types.py` | Frozen module-local FramePacket/RecognitionEvent; optional UTC; event `to_dict()` creates a new UUID each call when event ID empty | Allocate event ID once per event, preserve it across serialization, validate version/required fields and document type boundaries. |
+| `Runtime._publish()` | Max eight subscribers, each queue64; overflow discards oldest; publishes same mutable dictionary object to every queue | Keep existing public dictionary shape; isolate subscribers through fresh defensive copies or immutable internal record plus copies at boundary. Events remain best effort. |
+| `recognition/audio.py` | One SpeechQueue8, automatic priority0 and explicit priority1; FIFO within priority; explicit may evict queued automatic; valid callback and global stop generation; mic queue16 | Specify and test this existing arbitrator. No second queue, real indoor priority or route commands. |
+| `navigation/service.py` | Independent local GPSD worker; complete TPV validation; receipt-monotonic age; receiver UTC; distinct current and historical last-known | Preserve output/semantics through documented adapter; do not add route guidance or unknown receiver setup. |
+| `Runtime.dashboard_snapshot()` | Attempts runtime lock for 50 ms; after acquiring it may query profiles/SQLite; outdoor snapshot collected independently after recognition branch | Test no native inference/device access from HTTP; verify contention fallback preserves outdoor. If tests reveal unbounded profile/store reads, publish a bounded cached recognition projection instead. |
+| caregiver projection/JS | Allowlisted schema1; recognition1s expiry, GPS default10s; indoor forced not-integrated; connected poll500ms, failed retry5s, fetch abort4s; browser advances age independently | Preserve API/UI behavior and coordinated Python/JS regressions. Phone fetch must never renew source evidence. |
+| CLI/deployment | Single state-directory process lock; sockets bound before workers; two Waitress threads per server; fatal core worker death stops group; Caddy alone exposes dashboard HTTPS | Document lifecycle/permissions; fix only demonstrated cleanup/bounding defects. Enrollment and GPSD remain loopback. |
+
+The main narrow risks are unstable event IDs, shared mutable event objects, inconsistent timestamp/provenance conventions, stale derived recognition appearing newer than its frame, and potentially blocking profile work inside snapshot production. These have direct tests below.
+
+## Repository structure and ownership
+
+Keep `src/cognisight/recognition/`, `navigation/` and `caregiver/`. Recognition retains gallery/tracker/context/store policy, outdoor retains GPSD parsing, caregiver retains projection/authentication/rendering. Do not move source files or add a broad `system` framework merely to document them.
+
+Proposed small `src/cognisight/contracts.py` defines immutable shared status/provenance records and validators only where two modules actually consume them; existing modules adapt explicitly. Keep module-local types local. If documentation and two focused existing-type fixes suffice for a contract, do not create an unused abstraction. Proposed tests: `tests/test_contracts.py` plus existing runtime/audio/navigation/caregiver/CLI/Node suites.
+
+Owners: Meghana — recognition; Sharanya — outdoor; Jahnvi and Archisha — indoor (deferred); Jahnvi — caregiver/integration coordination. Record actual contract review by affected owners. This plan does not claim their agreement already occurred. Shared interface changes require approval before integration PR merge.
+
+## Document the existing schema-1 contracts first
+
+| Boundary | Input | Output | Rules |
+| --- | --- | --- | --- |
+| Capture → recognition/enrollment | Validated camera config; runtime-serialized `Vision.read()` | `FramePacket(frame_id, captured_at, utc, image)` | `captured_at` is Pi monotonic capture time; owned BGR 640×480 image, not a libcamera buffer lease. One capture owner. Frame IDs identify distinct observations within current capture lifetime; restart identity must be documented if IDs reset. |
+| Recognition → subscribers | Validated detections and tracker transitions | `RecognitionEvent(kind, track_id, person_id, timestamp, model_version, event_id, schema_version=1)` serialized as dict | UUID stable once assigned. No image/vector/raw transcript. Timestamp nullable verified UTC; Actual kinds are `confirmed` and `lost` from tracker transitions. Subscriber mutations cannot affect any other subscriber or producer record. |
+| Runtime → caregiver | `dashboard_snapshot()` called by read-only provider | `{schema_version:1, recognition, outdoor, indoor, health}` | Actual source age only; no camera reads/model execution/audio/native work in HTTP. Unknown schema fails closed in projection. |
+| Recognition section | Current tracker evidence plus verified profile fields | status/reason/data_source/people/observed_at/age_seconds/max_age_seconds | Max four people; only verified enrolled name/relationship/note; current evidence <1s, no calendar claim when time untrusted. Pause/enrollment/calibration failure produce explicit state. |
+| Outdoor section | Validated complete local GPSD TPV | status/reason/current coordinates or null/speed/observed_at/age/max-age/source/last_known | Default max-age10s, configurable positive ≤300s. No-fix/invalid/disconnected/stale distinct. Last-known always historical; duplicate epoch/partial TPV never renew evidence. |
+| Indoor section | No producer | `{status:unavailable,reason:not_integrated,data_source:unavailable}` | Preserve placeholder through runtime, projection and browser. No indoor camera/route/command output. |
+| Runtime → audio | `say(text, valid, priority)` and `cancel()` | Accepted boolean; explicitly selected USB audio-adapter output to AUX earphones; health callback | Single existing queue and one playback owner. Current recognition policy supplies validity; exact rules below. |
+| Phone → web | Same-origin authenticated HTTPS request | Allowlisted dashboard HTML/JSON, or auth/unavailable error | Read-only. No enrollment/control/image/audio endpoint; no raw exception/device path disclosure. |
+
+Document all actual keys with examples in `docs/system/CONTRACTS.md`. Examples are labeled synthetic; never suggest live hardware data. Include field type, nullable values, finite/range/text/list limits, required/optional status and module source. Keep exact existing caregiver schema1 output unchanged; additive internal metadata is removed by an explicit boundary adapter.
+
+## Shared semantics and immutable internal records
+
+A small immutable `SourceStamp` proposal contains `source_id`, `source_session`, `sequence`, `observed_monotonic`, optional `observed_at_utc`, `time_source` and `time_trust`. Use only where needed to carry original evidence safely; no mandatory new public envelope/API version. `source_id` is an opaque module/source identity, never a private device path or patient name. `source_session` changes at process/source restart. Sequence increases within a session and is not compared across restarts. Do not merge source sessions. No raw monotonic timestamp is persisted for reuse after reboot or compared with phone clocks.
+
+Time conventions: UTC is nullable epoch seconds at shared/public boundaries (existing GPSD timezone-aware ISO source time is normalized by its adapter); monotonic evidence time drives freshness; production/fetch time cannot replace evidence time. `time_source` is `system_sync/receiver/none`; trust is `synchronized/receiver_reported/unverified/unavailable`. Receiver UTC does not certify Pi clock synchronization. Existing system clock helper requires synchronization marker; absence yields unavailable rather than invented calendar time. Historical recognition dates require trusted applicable UTC. Missing UTC does not itself erase a genuinely current monotonic observation.
+
+Derived recognition must retain original frame capture age: if inference finishes after its frame is already ≥1s old, it cannot publish current people or speech. Current code sometimes stamps observation-completion time; add a focused correction/adapter preserving tracker behavior. Explicit command recency remains governed by tracker policy rather than inventing a new deadline. Current tracker confirms after three consecutive known observations, visibility age ≤1s, explicit person recency ≤10s, and automatic announcement cooldown60s; document and test these exact policies. At public expiry boundary age≥1s is stale even though tracker helper currently uses ≤1s; the projection adapter remains authoritative and the exact boundary is tested.
+
+Common states already accepted by caregiver projection are `live`, `unavailable`, `stale`, `paused`, `uncalibrated`, `no_fix`, `disconnected`, `invalid`, `mock`, `starting`. Keep module-specific health separate from source evidence: `ready` process/device health does not prove a current person/fix. `data_source` is `live/mock/unavailable`; mock stays visibly labeled and never becomes a failure fallback. Historical fields are explicitly separate. At age ≥max-age, evidence is stale; null/nonfinite/negative age cannot be current. Producer reason strings remain bounded machine-readable codes; no exception strings. Unknown schema, invalid status or malformed payload produces unavailable/invalid explicitly, never successful coercion.
+
+Do not invent event delivery guarantees. Current event queues cap64/subscriber, subscriber cap8, drop oldest on overflow, unsubscribe releases registry ownership. Document events as lossy best-effort notifications. Current snapshots, rather than replaying event history, are authoritative for monitoring. Event ID is allocated once; dict/list payloads are defensively copied per boundary. Commands with side effects are not sent over these lossy subscriptions.
+
+## Single-camera ownership and bounded work
+
+Vision owns one Picamera2 instance and one capture thread. Runtime alone serializes model objects, frame reads and enrollment sample inference. Retain one owned BGR copy in the latest mailbox and no camera images on disk. Enrollment cannot create a second camera. Another app/service using the camera produces unavailable status; do not auto-open a second device. Explicit close/start retry is permitted only after old owner has actually stopped. A stuck native reader means service failure/restart, not an extra replacement thread.
+
+Retain current capture request15fps, runtime target200ms iteration, at most four faces, OpenCV thread cap2, mailbox1, audio sample queue16, speech queue8, subscriber cap8/queue64. These are configuration/work limits, not measured throughput. Camera backlog drops old frames; stale inference results never become new evidence. Native calls cannot be forcibly interrupted safely by Python. #7 measures true frame/inference/load performance and records whether limits need review.
+
+Future indoor extension is documentation only: it would need an approved shared-frame ownership/fan-out design, its own evidence/error contract, coordinated caregiver schema support and semantic speech cancellation. Current LatestFrame has one consuming cursor and must not be handed to a second independent reader. Do not build extension machinery now.
+
+## Existing speech coordination contract
+
+One AudioEngine already arbitrates all present output. Keep queue capacity8 and existing priority numbers: explicit user recognition response1, automatic recognition announcement0. Higher priority dequeues first; equal priority FIFO; explicit queued speech can evict a queued automatic message when full. Duplicate text is coalesced per current implementation. Document/test that priority orders queued items; it does not currently promise native synthesis preemption. No navigation/emergency priority or routing command is introduced.
+
+`valid()` must pass before enqueue, before synthesis and each playback block; deleted/edited person, loss of tracker recency/visibility, pause/enrollment, shutdown or global generation cancellation invalidates dependent speech. Retain automatic versus explicit visibility/recency distinctions. Stop immediately requests output abort, clears queued work and increments generation through the existing control path; it does not wait for a queue slot. Stop while speaking is the only command intentionally accepted during playback. No built-in-speaker/default route or network ASR/TTS fallback. Disconnect/replug reconnects only explicit matching USB routes.
+
+Document semantic expiry rather than inventing blanket TTLs: automatic announcement remains valid only for current visible person; explicit context/history/repeat must revalidate person/profile and existing tracker recency; pause/reset clears dependent state. Add a stale-playback regression at each boundary. Playback block size (~50ms) is not a measured stop-latency guarantee; Vosk finalization/native synthesis/driver behavior are qualified by #7/#8. Future module speech would require approved domain/semantic key/generation/expiry rules within this same output owner; do not create an unused second arbitrator now.
+
+## Snapshot responsiveness, privacy and HTTP limits
+
+Current snapshot attempts the runtime lock for50ms and falls back to recognition unavailable while still obtaining independent outdoor status. Preserve and test this. No HTTP call may run Vision.read/detect, capture_array, audio synthesis or GPS socket reads. Snapshot copying/serialization must not hold inference locks for network work.
+
+Because existing snapshot can query the store after acquiring the lock, test a deliberately blocked profile read and a blocked inference worker. If profile access can exceed the budget, make runtime publish a bounded cached recognition projection when it changes and make HTTP read that cache. One latest projection, max four people and existing text limits; lock only to swap/copy, no store/model callback from reader. Do not add a broad coordinator/cache service when a small current-runtime cache suffices. Budget proposal: ≤50ms lock attempt and unavailable fallback; software tests verify bounded return without fragile machine-speed assertions by synchronization/barriers and bounded joins.
+
+Keep active polling500ms, failed retry5s, fetch abort4s, nonoverlapping requests and client monotonic age advance. Browser currently renders every1s; source expiry is applied on its next render tick. A successful response cannot renew evidence age. Session15min does not extend on polling. Auth failure clears names/locations; network failure clears current personal data. Personal data stays in authenticated/no-store responses; no images/vectors/raw audio/device paths/log tracebacks.
+
+Deployment contract stays enrollment127.0.0.1:8765, dashboard127.0.0.1:8766, local GPSD configured default2947, Caddy LAN HTTPS443 only. Preserve exact host/origin/loopback-peer guard, secure HttpOnly SameSite cookie, CSRF, CSP and bounded request body16KiB. Two Waitress workers/server remain. Before final runbook, document actual installed Waitress channel/connection/time bounds and make them explicit only using supported options validated against that version; no guessed defaults. Caddy proxies dashboard only, never enrollment. Phone trusts only public root CA after fingerprint comparison; no certificate-warning bypass or CA private-key transfer.
+
+## Lifecycle and failure boundaries
+
+Document actual acquisition order: validate private configuration/state and single-process lock; open store; bind configured localhost servers before workers; start Runtime, which owns audio/GPSD/camera; monitor fatal core worker failure; clean up in reverse order. Device unavailable states use existing bounded retries. Recognition camera/model/storage failure must leave independent GPSD operation and outdoor snapshots available. Audio loss clears its work and leaves other modules alive. GPSD reconnect remains independent. A dead runtime/HTTP worker or unresponsive native owner is a group failure; no thread-level design is called process crash isolation.
+
+On SIGTERM/Ctrl+C reject new work, set stop, cancel speech, close device/socket owners, stop HTTP listeners/channels/workers, join workers, then close SQLite. Existing cleanup already refuses closing DB under live request workers. Verify idempotence/partial-start rollback and no duplicate owner on restart. Current unit TimeoutStopSec15 may be shorter than cumulative configured joins; measure/document this and, if necessary, use one explicit bounded whole-group deadline or revise the unit through a focused tested change. Do not claim clean shutdown when any owned worker remains alive.
+
+State is outside Git, directory0700/secrets0600, unit UMask0077, unprivileged user. #7 checks actual camera/audio/serial permissions/OS groups; no broad permission grants or guessed serial pins. No native libraries changed underneath a live process. Model integrity hashes and approved exact native package lock are collected on the actual Pi; current version ranges are not qualification.
+
+## Original task breakdown and acceptance scope
+
+Each task starts with a failing focused test for a real behavior, implements the smallest change, reruns affected checks and produces a reviewable **local** commit by the authorized identity. Preserve existing work/branch rules. The user later authorized this completed release to main; no issue closure or
+invented team sign-off follows from that authorization.
+
+- [ ] **Task1: publish contracts and diagram.** Create `docs/architecture.md`, `docs/system/CONTRACTS.md` and editable diagram/generator/render below. Document current schema/examples/owner/error/time/queue/lifecycle rules and indoor deferral. Verify examples against shipped code/tests. Proposed local commit: `docs: define unified architecture and module contracts (#6)`.
+- [ ] **Task2: isolate event records.** Modify existing `recognition/types.py`/`runtime.py`, optional small `contracts.py` only where consumed. Add `tests/test_contracts.py` and extend runtime tests for stable UUID across serialization, independent subscriber mutation, bounded overflow/drop-oldest, subscriber cap/unsubscribe, invalid version/nonfinite age and source-session handling where used. Preserve event/public caregiver fields. Verify focused tests, then local commit `fix: stabilize and isolate module events (#6)`.
+- [ ] **Task3: preserve source evidence/freshness.** Focused runtime/temporal/caregiver tests show slow inference cannot renew an old frame, no-wall-clock still allows valid monotonic freshness, source reset/duplicate data cannot revive stale observations, blocked inference retains outdoor snapshot, blocked profile reads return bounded fallback. Make minimal timestamp adapter/cache change only where tests demonstrate need. Preserve calibration/tracker/enrollment/history semantics. Run navigation/caregiver and Node regressions; local commit `fix: retain source age across module projections (#6)`.
+- [ ] **Task4: verify audio/lifecycle contract.** Extend audio/runtime/CLI tests for existing queue priority/FIFO/capacity/stop-generation, validity during playback/profile changes, disconnect/replug route identity, partial startup cleanup, stalled native owner refusal, independent GPSD despite recognition failure and SQLite close-last. Implement only concrete gaps revealed by these tests; no second queue/new module. Review shutdown-unit deadline if changed. Local commit follows actual fixes, or tests/docs only if behavior already meets contract.
+- [ ] **Task5: finalize deployment handoff.** Coordinate #7 actual OS/native manifest and runbook facts. Give git-archive/scp transfer of approved local committed tree, exact Pi setup/service/Caddy trust/recovery steps and hardware evidence boundaries. Run whole software suite/Node/package checks once after integration; record exact environment/pass/skip/fail. Proposed local commit `docs: add unified setup and recovery guide (#6)` only after commands are checked.
+
+Software commands: `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `node --test tests/dashboard.test.cjs`, and compilation/package checks in `docs/VALIDATION.md`/CI. Focused tests precede whole-suite regression. Existing previously reported baseline, not rerun by this planning task:142 Python checks,126 pass/16 skip;4 Node checks pass. Native/web packages absent and sandbox socket restrictions cause skips; skips are not passes. CI/package/Pi/phone qualification is not inferred from local results.
+
+## Architecture artifact workflow and coverage
+
+The required `aws-architecture-diagram` skill was read. Its source-image/question/approval/generator/visual-verification workflow applies, adapted to the actual non-AWS system. No images were supplied. Approval of this draft precedes exhaustive final source-label checklist/icon selection/drawing. Use neutral shapes rather than invented AWS boundaries. Mark proposals/inferences † and report them.
+
+After approval: save editable `docs/system/cognisight-architecture.drawio`, generator alongside it, verified exported view alongside it, and embed/link these in required `docs/architecture.md`. Build with a local generator based on skill helpers, not pasted large XML. XML/edge-ID validation, local render and screenshot inspection are mandatory; fix overlaps/clipping/line-label collisions and rerender. If rendering unavailable, report incomplete verification rather than claim a final checked diagram. Stop temporary local preview server after inspection.
+
+Coverage checklist:
+
+- [ ] Physical wearer; camera PCB V2.0 with exact sensor/cable compatibility unverified†; owned AUX earphones/headset; required unselected USB sound adapter†; microphone/TRRS/CTIA unverified†; reported SIMA7670C RS232 board with positioning unverified†; caregiver phone on same private Wi-Fi.
+- [ ] Pi boundary: Vision single camera/copy/latest mailbox; runtime recognition/YuNet/SFace/tracker/verified profiles/enrollment; local SQLite/private config/models; independent NavigationService and local GPSD; one AudioEngine/Vosk/Piper/speech queue; no indoor producer.
+- [ ] Local enrollment127.0.0.1:8765, dashboard127.0.0.1:8766, GPSD local2947 configured, Caddy chosen LAN HTTPS443, phone authentication/public CA trust; no enrollment proxy.
+- [ ] Numbered data paths:1 camera→recognition/enrollment;2 verified positioning receiver†→local GPSD→NavigationService (disabled until hardware capability/setup verified);3 recognition/outdoor→runtime snapshot→allowlisted projection;4 phone↔Caddy↔dashboard;5 verified headset mic via required USB adapter†→Vosk→command parser/runtime;6 valid speech→single queue/Piper→required USB adapter†→owned AUX earphones;7 local enrollment/profile→SQLite→recognition.
+- [ ] Dashed control/health/start/stop/expiry paths separated from solid data arrows; original evidence time distinguished from HTTP update time; last-known location historical.
+- [ ] Contract panel: schema1, source/time trust, recognition1s/GPS10s configurable, queue bounds, explicit1/automatic0/stop-control, best-effort events.
+- [ ] Limitations panel: entire indoor#5 deferred; outdoor location/status only; Pi/native/GNSS/phone TLS/load qualification pending#7/#8; one wearer/credential; no safety/emergency promise.
+- [ ] Ownership labels map existing module directories to actual owners; repository/integration approval record has no invented sign-off.
+
+## Acceptance and handoff
+
+#6 is ready for review when `docs/architecture.md` contains verified editable architecture artifacts, all four module boundaries (including absent indoor) have documented inputs/outputs/time/errors, focused contract defects are tested/fixed, native dependencies/unimplemented features are explicit, and affected owners have actually approved interfaces before any integration PR merge. Record exact approval and software evidence. #7/#8 remain open gates until actual device/end-to-end tests occur. The current release has explicit user authorization to push to main; verify the actual remote result.
