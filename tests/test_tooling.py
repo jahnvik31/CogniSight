@@ -454,5 +454,86 @@ class QualificationReportRegressionTests(unittest.TestCase):
                     smoke.assert_not_called()
 
 
+class MeasuredSmokeTests(unittest.TestCase):
+    def fake_vision(self, faces=0, fail=False):
+        from types import SimpleNamespace
+        class Camera:
+            camera_properties = {'Model': 'imx219', 'SerialNumber': 'PRIVATE'}
+        class FakeVision:
+            closed = False
+            _cv2 = SimpleNamespace(__version__='4.10.0')
+            _np = SimpleNamespace(__version__='1.26.4')
+            _camera = Camera()
+            def __init__(self, config):
+                pass
+            def start(self):
+                if fail:
+                    raise RuntimeError('PRIVATE')
+            def read(self):
+                return SimpleNamespace(image=object())
+            def detect(self, image):
+                return [object()] * faces
+            def close(self):
+                FakeVision.closed = True
+        return FakeVision
+
+    def run_smoke(self, faces=0, fail=False, seconds=1):
+        vision = self.fake_vision(faces, fail)
+        with patch('cognisight.recognition.config.load_config', return_value={}), patch('cognisight.recognition.vision.Vision', vision), patch.object(qualify.time, 'monotonic', side_effect=[0, 0, .1, .2, 2, 2]):
+            result = qualify.smoke('synthetic.json', seconds)
+        self.assertTrue(vision.closed)
+        return result
+
+    def test_empty_scene_measures_detector_but_not_recognizer_features(self):
+        result = self.run_smoke()
+        self.assertEqual(result['camera_inference']['state'], 'smoke_passed')
+        self.assertEqual(result['camera_inference']['recognizer_features'], 'pending')
+        self.assertEqual(result['camera_inference']['sensor_model'], 'imx219')
+        self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_observed_features_measure_execution_not_identity_accuracy(self):
+        result = self.run_smoke(faces=1)
+        self.assertEqual(result['camera_inference']['recognizer_features'], 'smoke_passed')
+        self.assertEqual(result['camera_inference']['frames'], 1)
+        self.assertEqual(result['camera_inference']['imported_versions']['cv2'], '4.10.0')
+
+    def test_zero_frames_fail_and_normal_camera_failure_cleans_up(self):
+        self.assertEqual(self.run_smoke(seconds=0)['camera_inference']['state'], 'failed')
+        result = self.run_smoke(fail=True)
+        self.assertEqual(result['camera_inference']['state'], 'failed')
+        self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_audio_python_failure_keeps_camera_evidence_and_sanitizes_report(self):
+        class BrokenAudio:
+            closed = False
+            def __init__(self, *args):
+                pass
+            def start(self):
+                raise RuntimeError('PRIVATE')
+            def close(self):
+                BrokenAudio.closed = True
+        with patch('cognisight.recognition.config.load_config', return_value={}), patch('cognisight.recognition.vision.Vision', self.fake_vision()), patch('cognisight.recognition.audio.AudioEngine', BrokenAudio), patch.object(qualify.sys.stdin, 'isatty', return_value=True), patch.object(qualify.time, 'monotonic', side_effect=[0, 0, .1, .2, 2, 2]):
+            result = qualify.smoke('synthetic.json', 1, interactive=True)
+        self.assertEqual(result['camera_inference']['state'], 'smoke_passed')
+        self.assertEqual(result['audio']['state'], 'failed')
+        self.assertTrue(BrokenAudio.closed)
+        self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_empty_scene_keeps_recognition_pending_and_inventory_untouched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            inventory = Path(directory) / 'inventory.json'
+            output = Path(directory) / 'smoke.json'
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(qualify.main(['--output', str(inventory)]), 0)
+            original = inventory.read_bytes()
+            with patch.object(qualify, 'smoke', return_value={'camera_inference': {'state': 'smoke_passed', 'recognizer_features': 'pending'}, 'audio': {'state': 'pending_interactive_check'}}), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(qualify.main(['--config', 'synthetic.json', '--output', str(output)]), 0)
+            self.assertEqual(json.loads(output.read_text())['acceptance']['recognition_inference'], 'pending')
+            with patch.object(qualify, 'smoke', side_effect=RuntimeError('PRIVATE')), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(qualify.main(['--config', 'synthetic.json', '--output', str(output)]), 1)
+            self.assertEqual(inventory.read_bytes(), original)
+            self.assertNotIn('PRIVATE', output.read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

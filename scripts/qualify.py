@@ -16,6 +16,7 @@ import math
 import os
 import platform
 import resource
+import re
 import subprocess
 import sys
 import time
@@ -252,6 +253,23 @@ def hardware_report():
     }
 
 
+
+def _imported_versions(vision):
+    """Actual imported versions, separate from distribution metadata inventory."""
+    result = {}
+    for name, attribute in (("cv2", "_cv2"), ("numpy", "_np")):
+        version = getattr(getattr(vision, attribute, None), "__version__", None)
+        result[name] = version if isinstance(version, str) and re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}(?:[a-z0-9.+-]{0,20})", version) else None
+    return result
+
+
+def _sensor_model(vision):
+    # Only a sensor family/model is allowed; never publish camera IDs/metadata.
+    properties = getattr(getattr(vision, "_camera", None), "camera_properties", {})
+    model = properties.get("Model")
+    return model if isinstance(model, str) and re.fullmatch(r"(?:imx|ov)[0-9]{3,6}(?:_[a-z0-9]{1,12})?", model) else None
+
+
 def smoke(config_path, seconds, interactive=False):
     """Actual camera/inference timings; headset check requires explicit interaction."""
     from cognisight.recognition.config import load_config
@@ -265,7 +283,8 @@ def smoke(config_path, seconds, interactive=False):
     }
     try:
         vision.start()
-        deadline = time.monotonic() + seconds
+        capture_started = time.monotonic()
+        deadline = capture_started + seconds
         times, frames, face_observations = [], 0, 0
         while time.monotonic() < deadline:
             packet = vision.read()
@@ -275,14 +294,24 @@ def smoke(config_path, seconds, interactive=False):
             frames += 1
             face_observations += len(detected)
         result["camera_inference"] = {
-            "state": "smoke_passed",
+            "state": "smoke_passed" if frames else "failed",
+            "recognizer_features": "smoke_passed" if face_observations else "pending",
+            "requested_capture": {"width": 640, "height": 480, "fps": 15, "format": "RGB888"},
+            "elapsed_capture_seconds": max(0, time.monotonic() - capture_started),
+            "sensor_model": _sensor_model(vision),
+            "imported_versions": _imported_versions(vision),
             "frames": frames,
             "face_observations": face_observations,
             "p95_inference_ms": percentile(times),
             "note": "Inference time only, not appearance-to-speech latency or identity accuracy.",
         }
+    except Exception as exc:
+        result["camera_inference"] = {"state": "failed", "error_type": type(exc).__name__}
     finally:
-        vision.close()
+        try:
+            vision.close()
+        except Exception as exc:
+            result["camera_inference"] = {"state": "failed", "error_type": type(exc).__name__}
     if interactive:
         if not sys.stdin.isatty():
             raise ValueError(
@@ -325,8 +354,13 @@ def smoke(config_path, seconds, interactive=False):
                     "command_detected": bool(commands),
                     "note": "One microphone/playback check; not voice accuracy or interruption qualification.",
                 }
+        except Exception as exc:
+            result["audio"] = {"state": "failed", "error_type": type(exc).__name__}
         finally:
-            audio.close()
+            try:
+                audio.close()
+            except Exception as exc:
+                result["audio"] = {"state": "failed", "error_type": type(exc).__name__}
     return result
 
 
@@ -411,13 +445,15 @@ def main(argv=None):
             report["smoke"] = smoke(args.config, args.seconds, args.interactive)
             if report["smoke"]["camera_inference"]["state"] == "smoke_passed":
                 report["acceptance"]["camera_capture"] = "smoke_passed"
-                report["acceptance"]["recognition_inference"] = "smoke_passed"
+                if report["smoke"]["camera_inference"].get("recognizer_features") == "smoke_passed":
+                    report["acceptance"]["recognition_inference"] = "smoke_passed"
             if report["smoke"]["audio"]["state"] == "smoke_passed":
                 report["acceptance"]["usb_capture_playback"] = "smoke_passed"
             elif report["smoke"]["audio"]["state"] == "failed":
                 report["acceptance"]["usb_capture_playback"] = "failed"
                 code = 1
             if report["smoke"]["camera_inference"]["state"] == "failed":
+                report["acceptance"]["camera_capture"] = "failed"
                 code = 1
         except Exception as exc:
             # Exceptions can carry local paths or data; report type only.
