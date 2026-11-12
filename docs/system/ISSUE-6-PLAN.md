@@ -1,8 +1,23 @@
-# Unified system architecture and module interfaces — issue #6 draft
+# Unified system architecture and module interfaces — issue #6 approved plan
 
 **Status: user approved #6/#7 implementation and push to main on 12 November 2026. Software changes, contracts and rendered editable diagram are implemented; see ../architecture.md and ../VALIDATION.md. Physical acceptance and separate module-owner sign-off remain pending. The detailed proposal below records the original plan; its earlier no-push restrictions are superseded by that explicit user instruction.**
 
 Source: [GitHub issue #6](https://github.com/jahnvik31/CogniSight/issues/6), inspected 12 November 2026; repository `AGENTS.md`, `README.md`, actual recognition/navigation/caregiver source, deployment templates and validation/setup documents. This plan describes fresh work against the current checkout. **The user has deferred the entire indoor module (#5).** No indoor implementation is part of this phase.
+
+## Implemented software and remaining acceptance
+
+| Deliverable | Current state |
+| --- | --- |
+| Contracts, generated editable diagram and inspected view | Implemented: `CONTRACTS.md`, `../architecture.md` and diagram assets |
+| Stable event IDs, subscriber isolation and bounds | Implemented and regression-tested |
+| Capture-age freshness and bounded cached HTTP profiles | Implemented and regression-tested |
+| Speech ownership, partial-start and failed-owner cleanup | Implemented and regression-tested; actual device timing pending |
+| Operator handoff | Final `../hardware/PI-RUNBOOK.md`; real OS/native lock and device acceptance pending |
+
+The source findings and task breakdown below are the historical approved plan,
+not instructions to repeat completed implementation. Latest actual software
+checks are in [validation](../VALIDATION.md). Separate owner sign-off, if needed
+for the team's review process, is not inferred from the user's approval.
 
 ## Goal and scope
 
@@ -22,7 +37,7 @@ User reports Raspberry Pi OS 64-bit and an Imager screenshot shows a 64-bit sele
 
 Reported positioning board: **“SIMA7670C MODULE WITH RS232.”** This may identify a cellular modem board; GNSS capability/output is unconfirmed. Keep `navigation.enabled=false` and GPSD setup disabled until the exact board/manual, positioning capability and compatible data path are verified. Do not relabel modem data as GPS or guess RS232/UART wiring, voltage, baud or AT commands. A photo showing 22 contacts at the free camera ribbon end does not identify the hidden camera end or prove correct cable orientation. #7 owns these hardware checks.
 
-## Current source findings
+## Original source findings before the implemented fixes
 
 | Component | What actually exists | #6 action |
 | --- | --- | --- |
@@ -107,9 +122,10 @@ On SIGTERM/Ctrl+C reject new work, set stop, cancel speech, close device/socket 
 
 State is outside Git, directory0700/secrets0600, unit UMask0077, unprivileged user. #7 checks actual camera/audio/serial permissions/OS groups; no broad permission grants or guessed serial pins. No native libraries changed underneath a live process. Model integrity hashes and approved exact native package lock are collected on the actual Pi; current version ranges are not qualification.
 
-## Tasks after full plan approval
+## Original task breakdown and acceptance scope
 
-Each task starts with a failing focused test for a real behavior, implements the smallest change, reruns affected checks and produces a reviewable **local** commit by the authorized identity. Preserve existing work/branch rules. No push, merge, issue close or invented team sign-off.
+Each task starts with a failing focused test for a real behavior, implements the smallest change, reruns affected checks and produces a reviewable **local** commit by the authorized identity. Preserve existing work/branch rules. The user later authorized this completed release to main; no issue closure or
+invented team sign-off follows from that authorization.
 
 - [ ] **Task1: publish contracts and diagram.** Create `docs/architecture.md`, `docs/system/CONTRACTS.md` and editable diagram/generator/render below. Document current schema/examples/owner/error/time/queue/lifecycle rules and indoor deferral. Verify examples against shipped code/tests. Proposed local commit: `docs: define unified architecture and module contracts (#6)`.
 - [ ] **Task2: isolate event records.** Modify existing `recognition/types.py`/`runtime.py`, optional small `contracts.py` only where consumed. Add `tests/test_contracts.py` and extend runtime tests for stable UUID across serialization, independent subscriber mutation, bounded overflow/drop-oldest, subscriber cap/unsubscribe, invalid version/nonfinite age and source-session handling where used. Preserve event/public caregiver fields. Verify focused tests, then local commit `fix: stabilize and isolate module events (#6)`.
@@ -138,4 +154,4 @@ Coverage checklist:
 
 ## Acceptance and handoff
 
-#6 is ready for review when `docs/architecture.md` contains verified editable architecture artifacts, all four module boundaries (including absent indoor) have documented inputs/outputs/time/errors, focused contract defects are tested/fixed, native dependencies/unimplemented features are explicit, and affected owners have actually approved interfaces before any integration PR merge. Record exact approval and software evidence. #7/#8 remain open gates until actual device/end-to-end tests occur. No remote push in this phase.
+#6 is ready for review when `docs/architecture.md` contains verified editable architecture artifacts, all four module boundaries (including absent indoor) have documented inputs/outputs/time/errors, focused contract defects are tested/fixed, native dependencies/unimplemented features are explicit, and affected owners have actually approved interfaces before any integration PR merge. Record exact approval and software evidence. #7/#8 remain open gates until actual device/end-to-end tests occur. The current release has explicit user authorization to push to main; verify the actual remote result.

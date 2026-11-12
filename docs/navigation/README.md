@@ -19,6 +19,11 @@ JSON client is a deliberate dependency tradeoff, covered by protocol tests.
 [JSON protocol](https://gpsd.gitlab.io/gpsd/gpsd_json.html),
 [daemon options](https://gpsd.gitlab.io/gpsd/gpsd.html).
 
+The reported board is **SIMA7670C MODULE WITH RS232**. Its exact vendor manual,
+GNSS capability and electrical interface are unverified; keep navigation disabled.
+RS232 must never connect directly to Pi GPIO. Follow the [Pi runbook](../hardware/PI-RUNBOOK.md)
+and [current validation record](../VALIDATION.md) before device work.
+
 ## Hardware setup gate
 
 Before enabling navigation, record the board manufacturer/model/revision and

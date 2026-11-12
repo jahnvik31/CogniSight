@@ -1,6 +1,6 @@
 # Raspberry Pi 5 and camera qualification implementation plan
 
-> **For agentic workers:** After user approval, use `superpowers:executing-plans` or the user's chosen execution method task by task. The user approved this software implementation and pushing the release to main on 12 November 2026. Physical-device actions remain subject to actual access and the checkpoints below; no OS replacement is planned.
+> **For agentic workers:** For future changes after their own approval, use `superpowers:executing-plans` or the user's chosen execution method task by task. The user approved this software implementation and pushing the release to main on 12 November 2026. Physical-device actions remain subject to actual access and the checkpoints below; no OS replacement is planned.
 
 **Goal:** Make the actual Pi 5 development setup reproducible, diagnose native dependency failures honestly, and collect real camera/recognition evidence for [issue #7](https://github.com/jahnvik31/CogniSight/issues/7).
 
@@ -8,7 +8,21 @@
 
 **Tech stack:** Raspberry Pi 5 8 GB, Camera Module 2, Raspberry Pi OS camera packages, system Python plus a virtual environment, NumPy/OpenCV YuNet/SFace, Vosk/Piper/sounddevice, existing Waitress/Caddy deployment.
 
-**Spec:** Live issue #7, repository `AGENTS.md`, `README.md`, `docs/recognition/README.md`, `docs/recognition/QUALIFICATION.md`, and the approved session scope. `PI-RUNBOOK-DRAFT.md` is the proposed user-facing procedure, not evidence that its commands have run on hardware.
+**Spec:** Live issue #7, repository `AGENTS.md`, `README.md`, `docs/recognition/README.md`, `docs/recognition/QUALIFICATION.md`, and the approved session scope. [PI-RUNBOOK.md](PI-RUNBOOK.md) is the final user-facing procedure; the old draft
+is a forwarding page. Neither is evidence that commands ran on hardware.
+
+## Implemented software and remaining device work
+
+| Deliverable | Current state |
+| --- | --- |
+| Isolated native doctor and CLI | Implemented; tests in `tests/test_diagnostics.py` and `tests/test_cli.py` |
+| Honest camera/SFace/audio smoke evidence | Implemented; tests in `tests/test_tooling.py` |
+| Hardware inventory, simple SSH/service/phone runbook | Implemented in `README.md` and `PI-RUNBOOK.md` |
+| Boot, preview, capture, native import lock, audio, GNSS, phone TLS/load | Pending actual devices; no pass claimed |
+
+The detailed task lists below preserve the approved design. See
+[validation](../VALIDATION.md) for current executed software checks; unchecked
+hardware rows do not imply the completed tools need reimplementation.
 
 ## Approval and facts still needed
 
@@ -36,7 +50,9 @@ If answers are unavailable, finish software/doc deliverables after approval and 
 - Install Picamera2/libcamera with matching OS packages, use `venv --system-site-packages`, never `pip install libcamera`, never `sudo pip`, and never bypass externally-managed Python protections.
 - Exact apt/Python/model versions are captured on the actual passing Pi. Broad dependency ranges or a lock generated on the Mac do not establish compatibility.
 - Real images, voices, names, locations, private keys, configuration, account identifiers, serial numbers and patient records never enter Git. Reports contain only non-identifying evidence; private snapshots remain outside tracked files.
-- After approval, local commits use `jahnvik31 <jahnvikotangale@gmail.com>`. No push, merge, issue closure or remote publication until the user authorizes the relevant later stage.
+- Commits use `jahnvik31 <jahnvikotangale@gmail.com>`. The user authorized the
+  finished release to main; never force-push, close issues or invent hardware
+  acceptance. Record the actual push result.
 
 ## Review focus
 
@@ -59,7 +75,9 @@ If answers are unavailable, finish software/doc deliverables after approval and 
 | `docs/recognition/README.md`, `docs/VALIDATION.md`, root `README.md` | Link the final runbook and distinguish software verification from physical acceptance |
 | `pyproject.toml` or `deploy/constraints-pi-bookworm.txt` | Change only if an actual resolved/native-tested baseline requires narrower package versions; no speculative pins |
 
-No production file changes occur in this planning stage. Coordinate CLI-file edits with #6 before execution.
+The software implementation is complete in the release tree. The original file
+map/checklists below document scope; unchecked physical steps are still pending.
+Use [validation](../VALIDATION.md) for current results rather than old plan counts.
 
 ## Task 1: Diagnose real native imports without acquiring devices
 

@@ -38,4 +38,5 @@ Diagram daggers mark unverified hardware identity or paths: exact camera sensor/
 
 The Pi is reported as Pi 5/8 GB, Raspberry Pi OS 64-bit, SSH user `jahnvi`, hostname `cognisight`; installed OS release/Python and actual IP are pending. Use the [simple SSH runbook](hardware/PI-RUNBOOK.md) and [hardware evidence checklist](hardware/README.md). Source coverage includes the physical endpoints, single device owners, SQLite/models, all seven paths, loopback/LAN ports, control versus data arrows, schema/freshness/queue rules, module owners and deferred indoor state.
 
-See [validation](VALIDATION.md) for exact software results and unmeasured hardware/load/phone gates. Do not close #7 or #8 merely because this diagram or passing software tests exist.
+The [contributor handoff](../NEXT_AGENT_README.md) records current release and
+Git instructions. See [validation](VALIDATION.md) for exact software results and unmeasured hardware/load/phone gates. Do not close #7 or #8 merely because this diagram or passing software tests exist.

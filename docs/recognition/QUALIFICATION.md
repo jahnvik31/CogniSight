@@ -1,9 +1,12 @@
 # Hardware acceptance record
 
-Status: **NOT RUN on target hardware**. This repository's local development host
-is macOS/Python 3.9.6; pip installation failed because DNS/network access is
-restricted. Hardware availability reported by the user does not establish remote
-access to that hardware. No Pi, camera, microphone, or TTS test has been claimed.
+Status: **NOT RUN on target hardware**. Read [validation](../VALIDATION.md) for
+current software-test/build evidence; earlier development-host limitations are
+not hardware results. Hardware ownership does not establish remote access or
+prove compatibility. No Pi camera, microphone, GNSS or TTS pass is claimed.
+Use the [Pi runbook](../hardware/PI-RUNBOOK.md) and save a separate inventory before
+configured smoke; a native hang can prevent smoke reporting. Empty-scene capture
+is not SFace feature execution, and feature execution is not identity accuracy.
 
 ## Release gates
 
@@ -50,7 +53,8 @@ correlated. No liveness/authentication claim is made.
 7. Camera busy, disconnected, restart; malformed/missing/hash-mismatched model.
 8. Storage unavailable/full; clock unsynchronized or moved backward; service reboot.
 9. Concurrent enrollment clicks, cancellation, session expiration, browser close.
-10. Local browser security tests with dependencies installed; no remote binding.
+10. Full software suite with required dependencies, and actual phone login,
+    logout, trusted TLS, expiry and source recovery; enrollment stays loopback.
 
 Before marking #2 complete, attach the actual report and limitations, link
 implementation PRs, and coordinate the updated fresh-implementation scope. Do not

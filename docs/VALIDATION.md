@@ -1,108 +1,73 @@
-# Software validation and release boundaries
+# Software validation and physical acceptance
 
-## Implemented scope
+Updated 12 November 2026. The user authorized completing remaining nonphysical work, committing as `jahnvik31 <jahnvikotangale@gmail.com>`, and attempting this release to `main`. Check the actual push result; authorization is not evidence of publication. No issues are automatically closed.
 
-- #2: offline recognition/context, USB speech adapters, local enrollment and history.
-- #3: user-confirmed **verified location/status first**, fresh GPSD implementation.
-  No walking directions, maps, cellular support or guessed GNSS vendor commands.
-- #4: user-confirmed **caregiver phone on the same Wi-Fi**, read-only authenticated
-  HTTPS monitoring; one wearer and credential per Pi. Enrollment stays loopback-only.
-- #6: stable validated event IDs, isolated subscribers, capture-age freshness, cached
-  HTTP profile projection, shutdown failure propagation, contracts and editable diagram.
-- #7 software: isolated `doctor --native`, truthful camera/SFace smoke reporting,
-  hardware checklist and simple SSH runbook. Device acceptance remains pending.
-- Indoor navigation has no producer and remains explicitly not integrated.
+## Implemented software
 
-The user approved #6/#7 implementation and explicitly authorized pushing the finished release to `main` on 12 November 2026, using `jahnvik31 <jahnvikotangale@gmail.com>`. This supersedes the earlier local-only instruction for this release. Do not infer a successful push or CI run from that authorization.
+| Issue | Software delivered | Device evidence still required |
+|---|---|---|
+| #2 | Offline recognition/context/history, verified profiles, single-camera adapter, offline voice, local enrollment, calibration/qualification tools | Camera/model execution, headset adapter/microphone, consented calibration/accuracy and latency |
+| #3 | Independent local GPSD client with validated fixes, source expiry and distinct last-known location | Exact reported board/manual and genuine compatible GNSS output; no routes in this version |
+| #4 | Approved workspace-style caregiver UI, authenticated read-only same-Wi-Fi dashboard, CSRF/fixed sessions/proxy guards | Actual phone, trusted HTTPS, LAN access and accessibility/load |
+| #5 | Deferred by user; unavailable/not_integrated | Do not implement indoor navigation in this release |
+| #6 | Stable validated event IDs, isolated subscribers, capture-age freshness, cached HTTP projection, cleanup propagation, contracts and rendered editable diagram | Device shutdown/load evidence; no invented module-owner sign-off |
+| #7 | Isolated native diagnostics, truthful camera/SFace smoke reporting, hardware checklist and complete SSH runbook | Actual Pi OS/native ABI, camera preview/still, sound adapter and package/model evidence |
+| #8 | Eight real-component integration checks from SQLite/gallery/tracker and GPSD parsing through the authenticated Flask consumer | Real hardware/phone/TLS/combined-load acceptance |
 
-## Local verification
+## Latest local software results
+
+**191 Python checks: 190 passed, one skipped. Four JavaScript checks passed.** The sole skipped check is `test_actual_loopback_stream_handshake_split_lines_and_shutdown`: this sandbox denies binding a TCP loopback listener. The parser/worker/socket-boundary tests using controlled synthetic responses pass; real listener transport still must execute in unrestricted CI/on the Pi. A skip is not a pass.
+
+The final full run uses an isolated temporary environment on macOS arm64 with bundled **Python 3.12**, NumPy **1.26.4**, OpenCV headless **4.10.0.84**, Flask **3.1.3**, Flask-WTF **1.3.0**, Waitress **3.0.2**, Werkzeug **3.1.9**, WTForms **3.3.2**, MarkupSafe **3.0.4**, Jinja2 **3.1.6**, itsdangerous **2.2.0**, blinker **1.9.0**, and click **8.5.1**. Wheels were obtained from PyPI using the browser's network access, verified against PyPI SHA-256 metadata, and installed into the temporary environment. No global packages or Pi dependencies were changed. This is software-test evidence, not a Pi lock or native-device qualification.
+
+Previously skipped Flask login/CSRF/session/enrollment tests, actual Waitress proxy/options parsing, and actual NumPy/OpenCV image-quality tests now run successfully. `pip check` reports no broken requirements. Source/scripts/tests compile successfully. Earlier 173-test/17-skip figures describe the previous limited host run, not the latest evidence.
+
+From the repository root after installing the project software-test dependencies:
 
 ```sh
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --test tests/dashboard.test.cjs
-PYTHONPYCACHEPREFIX=/private/tmp/cognisight-pycache python3 -m compileall -q src scripts tests
+python3 -m compileall -q src scripts tests
 ```
 
-The development host lacks Flask/Flask-WTF, Waitress, NumPy/OpenCV and Pi/audio
-libraries. Dependency installation and Git pushes are blocked by this execution
-environment's network restrictions. The Python suite reports exact skipped checks;
-those are not successes. It also skips its real TCP loopback test when the sandbox
-denies socket binding. Boundary tests still exercise the GPSD parser/worker with
-controlled synthetic socket responses.
+The completion environment lives at `/private/tmp/cognisight-completion-venv` on this development machine only; the Pi runbook creates its own environment. Do not copy this Mac environment onto the Pi.
 
-Latest local run: **173 Python checks: 156 passed, 17 skipped; four Node checks passed.**
-The extra skipped check validates server options against the actual installed
-Waitress parser, which is unavailable here. Compilation of source/scripts/tests passed.
+## Integration and browser evidence
 
-Node tests execute the **shipped dashboard JavaScript** against a small DOM boundary:
-source-age expiry without new polls, expired-session removal of sensitive content,
-network-failure clearing/retry, and refresh timing before recognition expiry. They are not a substitute for a phone browser.
-The actual Jinja templates, styles and script were additionally rendered in
-Playwright at 320-, 390-, and 1440-pixel viewports using intercepted, clearly labelled simulated
-responses. No horizontal overflow was observed. The UI uses a compact workspace
-layout inspired by monday.com app navigation, source/status pills and readable
-phone typography. Active polling is 500 ms with five-second failure retries; the
-combined Pi load of multiple caregiver tabs still needs measurement. That preview does not test Flask
-login, certificates, real positions or target hardware.
+`tests/test_integration.py` runs actual temporary SQLite Store, gallery matching, tracker, event subscriptions, NavigationService VERSION/TPV parsing, Runtime snapshot and caregiver Flask routes together. It verifies authenticated verified context/location, unknown/stale/invalid/unavailable behavior, independent producer failures, profile changes, lock contention, logout and fixed session expiry. Inputs are synthetic and contain no real patient/device data. The Flask client models HTTPS after proxy termination; it does not negotiate TLS.
 
-## CI gate
+The four Node checks execute the shipped dashboard JavaScript against a DOM boundary: source-age expiry without new polls, authentication expiry clearing, network-failure clearing/retry, and polling before recognition expiry. Actual Jinja/CSS/JavaScript were also visually rendered at 320, 390 and 1440 pixels using labelled simulated responses without observed horizontal overflow. This does not prove real phone TLS or accessibility acceptance. Active polling is 500 ms and failure retry is five seconds; actual combined Pi load still needs measurement.
 
-`.github/workflows/software-checks.yml` uses Python 3.11 and Node 24, installs
-software-test dependencies, rejects any skipped software tests, executes the
-JavaScript tests, builds a wheel and checks that shipped templates/styles/scripts
-are present. It uses read-only repository permissions and does not commit/publish.
-**The workflow has not run in this session.** A local isolated wheel-build attempt
-failed while downloading `setuptools>=61` because DNS/network access is unavailable.
-The host has setuptools 58.0.4; a no-isolation experiment produced an invalid empty
-`UNKNOWN` wheel and failed content verification. That artifact is outside the repo
-and is not a release package. No successful wheel build is claimed. Its result must be checked after
-network access permits pushing. Hardware acceptance is never inferred from CI.
+See [issue #8 scope](system/ISSUE-8-PLAN.md) and [contracts](system/CONTRACTS.md).
 
-Reference action usage:
-[checkout](https://github.com/actions/checkout),
-[setup-python](https://github.com/actions/setup-python),
-[setup-node](https://github.com/actions/setup-node).
+## Package and proxy checks
 
-## Review fixes
+A local **cognisight-0.1.0-py3-none-any.whl** builds with Python 3.12/setuptools **84.2.1**. Package checks verify required templates/styles/scripts, diagnostics/runtime modules, project metadata and CLI entry point. A temporary installed-wheel check runs the shipped CLI outside the source checkout. This supersedes the earlier unsuccessful build with the host's old setuptools 58.0.4; do not use the earlier empty UNKNOWN-wheel experiment.
 
-Independent review and regression checks addressed:
+The official **Caddy 2.11.9 mac arm64** archive was checked against its published release checksum. `caddy validate` successfully accepts `deploy/Caddyfile.example` with a synthetic hostname/private-network binding configuration. `caddy fmt` normalizes the file. Its redundant explicit forwarding-header warning is nonblocking; upstream host/IP trust remains restricted by Waitress. No server listener, phone certificate installation or physical Pi Caddy service is claimed. Actual device/phone deployment remains pending.
 
-- Slow recognition no longer blocks the independent GPS dashboard projection.
-- Dropped/late frames cannot manufacture consecutive recognition or a continuous
-  encounter; queued speech expires using elapsed time.
-- Waitress trusts only the local proxy's HTTPS protocol header; forwarded host and
-  client-address headers remain untrusted. The backend is still loopback-only.
-- Polling does not extend the fifteen-minute caregiver session.
-- HTTPS forms retain same-origin Referer so Flask-WTF's strict CSRF checks work;
-  missing/cross-origin Referer remains rejected. The real Flask regressions are
-  dependency-gated locally and mandatory in CI.
-- Listener, keepalive channels and request workers are stopped before closing
-  SQLite. A stuck request worker makes shutdown fail rather than closing its DB.
-- Stop timing checks every trial; command accuracy checks every speaker/intent;
-  private qualification reports cannot overwrite source/configuration files.
+`.github/workflows/software-checks.yml` uses Python 3.11/Node 24, installs web/vision test dependencies, rejects any skipped software tests, runs the Node checks, builds a wheel and checks shipped assets. It has read-only repository permissions. **The remote workflow has not run in this session.** Check it after a successful push; local package success is not remote CI success.
 
-## Not yet qualified
+## Defects reproduced and fixed
 
-1. Exact GNSS board model, connection, antenna, vendor setup, and genuine outdoor fix.
-2. Pi camera/model inference, headset speech/interruptions, and the qualified
-   Python/apt/model lock on the actual device.
-3. Caddy validation, phone CA trust, end-to-end HTTPS login/logout/expiry and LAN
-   reachability. No certificate-warning bypass is allowed.
-4. Real recognition accuracy, GNSS accuracy/fix behavior, accessibility and two-hour
-   combined-load/thermal/memory/latency measurements.
-5. A successful GitHub push and successful software CI/package build.
+- Both Flask apps passed a timedelta as the CSRF time limit, causing valid form submission to raise TypeError. They now pass 900 seconds as required by [Flask-WTF configuration](https://flask-wtf.readthedocs.io/en/1.2.x/config/); login and explicit fifteen-minute CSRF expiry tests pass.
+- Native diagnostic bytes could break decoding, and native output was retained unnecessarily. Child Python/native logs now go to the null device; only a small validated binary JSON envelope is returned, under per-probe timeout control.
+- A dead capture thread could leave a retained camera owner and permit a second `start()`. Restart now requires explicit owner cleanup even after the reader exits.
+- Failed measured trial gates and empty requested trial CSVs previously returned success. Qualification now returns exit 1 while preserving the private report; missing unrequested categories stay pending.
+- Password setup previously accepted values longer than the login forms permit. It now enforces 12-256 characters before writing state.
+- Earlier regressions fixed mutable/shared event records, stale frame completion timestamps, HTTP SQLite reads, source/session renewal, stale speech, keepalive/request-worker cleanup and failed-owner shutdown propagation. Failed cleanup prevents closing SQLite beneath a remaining owner. Actual native hangs remain a supervisor/process boundary.
 
-Use module plans/setup guides and docs/recognition/QUALIFICATION.md to record
-actual evidence. No GitHub issues are closed or hardware acceptance claimed here.
+## Only device and external-environment gates remain
 
-## Issue #6/#7 handoff
+1. Actual Pi release/Python/architecture, OS-matched Picamera2/libcamera and NumPy/OpenCV compatibility, permissions, power/cooling, reboot and package/model version evidence.
+2. Real camera cable/sensor, human-visible preview, private still, native models, headset through a verified USB sound adapter, microphone and interruption latency.
+3. Exact SIMA7670C/RS232 carrier/manual, genuine GNSS capability/interface and actual valid local GPSD fixes. Leave navigation disabled until verified; no guessed wiring/AT commands.
+4. Same-Wi-Fi phone with trusted Caddy public root, actual HTTPS login/logout/expiry/source loss/recovery and LAN reachability.
+5. Held-out recognition accuracy/calibration, genuine position/voice latency, accessibility, offline operation, reconnect and two-hour combined thermal/memory/load measurements.
+6. The sandbox-blocked loopback listener check, an actual remote GitHub push and successful remote CI. These are environment/external-service gates, not unfinished feature implementation.
 
-Read [architecture](architecture.md), [contracts](system/CONTRACTS.md),
-[hardware checklist](hardware/README.md) and the [simple SSH runbook](hardware/PI-RUNBOOK.md).
-The official diagrams.net viewer rendered the generated editable diagram; the PNG
-was visually inspected. Hardware daggers identify unverified camera/adapter/GNSS paths.
-The native import doctor contains per-probe timeouts; camera/audio smoke remains
-in-process and its sample period is not a native-hang deadline. Save inventory first.
-Review also found and fixed stale audio worker ownership, partial-start cleanup and
-shutdown error propagation; failed device cleanup prevents SQLite close. HTTP bounds
-are explicit and the service stop budget is 90 seconds, still unmeasured on the Pi.
+## Contributor deliverables
+
+Read [the simple SSH runbook](hardware/PI-RUNBOOK.md), [hardware checklist](hardware/README.md), [architecture](architecture.md) and [contracts](system/CONTRACTS.md). A printable [next-steps PDF](../output/pdf/CogniSight-next-steps.pdf) reproduces the maintained runbook with a short opening checklist. Its pages were rendered and visually inspected. Regenerate it after changing the runbook using `scripts/build_next_steps_pdf.py` (ReportLab is a documentation dependency only).
+
+The architecture PNG was rendered with the official diagrams.net viewer and inspected. Daggers identify unverified hardware paths. Camera/audio smoke remains in-process; its sampling duration is not a native-hang deadline. Save inventory separately first. No raw images, voices, identities, locations or private keys are part of the shared handoff.

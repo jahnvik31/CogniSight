@@ -1,5 +1,11 @@
 # Approved implementation plan — issue #2
 
+**Current status, 12 November 2026:** the software below is implemented. This
+file preserves the approved design, rather than a list of unfinished coding tasks.
+See [validation](../VALIDATION.md) for latest software evidence and the
+[Pi runbook](../hardware/PI-RUNBOOK.md) for remaining device work. The owned AUX
+headset needs a compatible USB sound adapter and a verified microphone path.
+
 Fresh implementation; never restore reverted code. Raspberry Pi 5 8 GB,
 Camera Module 2 with standard-to-mini cable, USB microphone/headset.
 Offline English; 100 profiles; local browser enrollment; automatic and
@@ -28,4 +34,5 @@ Held-out participants/sessions and explicit accuracy coverage are required.
 Synthetic embeddings establish software correctness, never biometric accuracy.
 
 No hardware claims before measured qualification. Shared integration contracts
-remain coordinated through #6. No remote enrollment or broader dashboard.
+remain coordinated through #6. Enrollment remains loopback-only; the separate read-only caregiver dashboard is
+implemented under #4. It never exposes enrollment to the phone.

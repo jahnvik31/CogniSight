@@ -110,7 +110,12 @@ python -m pip install -e '.[vision,audio,dev]'
 python -m pip check
 cognisight doctor
 cognisight doctor --native
-python -c 'import numpy, cv2; from picamera2 import Picamera2; import libcamera; print("NumPy", numpy.__version__); print("OpenCV", cv2.__version__)'
+python - <<'CHECK'
+import numpy, cv2, libcamera
+from picamera2 import Picamera2
+print("NumPy", numpy.__version__)
+print("OpenCV", cv2.__version__)
+CHECK
 cognisight devices
 ```
 
@@ -192,7 +197,8 @@ Set `model_version` to `sface:` followed by the printed hash, matching `models/m
 mkdir -p qualification-private
 chmod 700 qualification-private
 python scripts/qualify.py --output qualification-private/inventory.json
-python scripts/qualify.py --config config.json --seconds 10 --interactive --output qualification-private/smoke.json
+python scripts/qualify.py --config config.json --seconds 10 \
+  --interactive --output qualification-private/smoke.json
 ```
 
 **Expected:** A private report records camera frames, measured processing time and your actual headset check. `recognizer_features: pending` means no accepted face feature was measured (for example, an empty scene). `smoke_passed` on that field proves feature execution only, never correct identity recognition.
@@ -225,9 +231,130 @@ Sign in using the password from Step 14. This private connection keeps enrollmen
 **Expected:** The local enrollment page opens and accepts your login.
 **If local port 8875 is busy:** Choose another free local port in both the command and browser URL.
 
-## Advanced checks / later
+## 16. Run the software checks on this Pi
 
-These checks belong after the basic setup works. Anything untested stays **pending**.
+**On your Pi, in the copied build folder with `.venv` active:**
+
+```sh
+PYTHONPATH=src python -m unittest discover -s tests -v
+python -m pip check
+```
+
+If Node is installed, also run `node --test tests/dashboard.test.cjs`. These are software checks; they do not replace the real camera, headset or phone steps. See [validation](../VALIDATION.md) for the development results to compare with this run.
+
+**Expected:** No failed checks. Any skip is listed with its actual reason.
+**If it fails:** Save the test name and short error class privately. Fix that problem before enabling automatic startup; do not hide skips or change tests to obtain a pass.
+
+## 17. Make the tested app a user service
+
+Do this only after foreground startup and Ctrl-C both work. Stop the foreground app first. Keep the same build folder and private state; do not run two copies.
+
+**On your Pi, in the copied build folder:** This prepares a unit with the real build path instead of the template's example path.
+
+```sh
+mkdir -p "$HOME/.config/systemd/user"
+python - <<'UNIT'
+from pathlib import Path
+build = Path.cwd().resolve()
+unit = build / 'deploy/cognisight.service'
+target = Path.home() / '.config/systemd/user/cognisight.service'
+if target.exists():
+    raise SystemExit('A unit already exists. Back it up and review it before replacement.')
+target.write_text(unit.read_text().replace('%h/CogniSight', str(build)))
+UNIT
+systemctl --user daemon-reload
+systemctl --user start cognisight.service
+systemctl --user status cognisight.service --no-pager
+```
+
+**Expected:** The status says `active (running)` and the local enrollment page works. This means the process runs, not that every module is qualified. The unit waits up to 90 seconds for shutdown; stuck native code can still need supervisor termination.
+**If it fails:** Run `journalctl --user -u cognisight.service -n 40 --no-pager`. Inspect it privately; share only non-identifying status/error classes. Check the unit's real paths and ordinary-user camera/audio permissions. Do not switch the runtime to root or make device files world-writable.
+
+After the service passes the headset and camera checks, **on your Pi:**
+
+```sh
+systemctl --user enable cognisight.service
+systemctl --user stop cognisight.service
+systemctl --user start cognisight.service
+systemctl --user restart cognisight.service
+```
+
+The four commands enable startup for user sessions, then check stop/start/restart. Confirm each operation before issuing the next. For startup after boot without logging in, first verify that headless audio works for `jahnvi`. Then choose to keep that user's services running after logout with `sudo loginctl enable-linger jahnvi`. This is an operating-system setting, not a substitute for device permissions. Reboot and repeat SSH, status, camera and audio checks. If headless audio fails, leave automatic startup disabled with `systemctl --user disable --now cognisight.service` until the route works.
+
+## 18. Put the caregiver dashboard on HTTPS
+
+This step needs the actual Pi IP and the caregiver's phone. Keep navigation disabled while the SIM A7670C board remains unverified. The dashboard can honestly show outdoor location as unavailable.
+
+**On your Pi:** Find the LAN address with `hostname -I`. Pick one stable private address for this Wi-Fi; a router reservation helps. Choose a hostname the phone can actually resolve, or use that reserved IP. In `config.json`, set `caregiver.enabled` to `true`, set `allowed_hosts` to that exact hostname/IP, and keep backend port `8766`. Restart the app after saving. Do not put a scheme, URL path or port into `allowed_hosts`.
+
+Install Caddy for the actual OS using its [official installation instructions](https://caddyserver.com/docs/install). Then inspect the installed service before copying configuration:
+
+```sh
+caddy version
+systemctl show caddy -p User -p ExecStart -p FragmentPath
+cp -n deploy/Caddyfile.example deploy/Caddyfile
+chmod 600 deploy/Caddyfile
+nano deploy/Caddyfile
+```
+
+In the copied Caddyfile, replace `{$COGNISIGHT_HOST}` with the chosen hostname/IP and `{$COGNISIGHT_LAN_IP}` with the Pi's actual private LAN IP. These are configuration placeholders, not passwords. Keep the upstream `127.0.0.1:8766`, the LAN-only matcher, internal TLS and disabled HTTP redirects. The file is ignored by Git.
+
+If the installed Caddy unit uses `/etc/caddy/Caddyfile` and has no other site configuration to preserve, first back up that file privately. Then validate/install the reviewed file:
+
+```sh
+sudo caddy validate --config "$PWD/deploy/Caddyfile" --adapter caddyfile
+sudo cp -n /etc/caddy/Caddyfile /etc/caddy/Caddyfile.cognisight-before
+sudo install -o root -g root -m 644 deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+systemctl status caddy --no-pager
+```
+
+Run each command only after the previous one succeeds. If the service is not running, use `sudo systemctl start caddy` after validation instead of reload. If its config path/account differs, use the actual installed service configuration; do not overwrite unrelated sites. Caddy's [service guide](https://caddyserver.com/docs/running#using-the-service) explains those paths and commands.
+
+**Expected:** App backend stays on loopback; Caddy listens for HTTPS on the chosen Pi LAN IP. Phone login is not ready until certificate trust is complete.
+**If it fails:** Check matching hostname/IP, Caddy validation, service status and app status. Never proxy enrollment `8765`, expose GPSD, add router port forwarding or disable certificate checks.
+
+For the official `caddy` service account with default storage, the public CA certificate is normally `/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt`. Verify the account/storage first; custom installations differ. **On your Pi:**
+
+```sh
+COGNI_CA=/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+sudo openssl x509 -in "$COGNI_CA" -noout -subject -fingerprint -sha256
+```
+
+For that verified default storage path, stage only the public certificate. **On your Pi:**
+
+```sh
+sudo install -o jahnvi -g "$(id -gn jahnvi)" -m 644 \
+  "$COGNI_CA" /tmp/cognisight-root.crt
+```
+
+**On your laptop:**
+
+```sh
+scp jahnvi@cognisight.local:/tmp/cognisight-root.crt /tmp/cognisight-root.crt
+openssl x509 -in /tmp/cognisight-root.crt -noout -fingerprint -sha256
+```
+
+Compare that fingerprint with the trusted Pi output, then transfer the public certificate to the phone through a trusted local method such as USB or AirDrop. Delete the temporary public-certificate copies after installation. Never change the CA directory's permissions or transfer `root.key`, private keys or the entire Caddy data directory.
+
+**On the phone:** Install the public root using the phone's supported certificate process. For iPhone, a manually installed profile also needs explicit trust enabled in certificate trust settings; use [Apple's instructions](https://support.apple.com/en-us/102390). On Android, use the manufacturer's certificate/CA installation settings; menus differ by version, and a Wi-Fi-only certificate entry may not establish browser CA trust. Use the actual phone's official instructions and verify in its browser. Do not choose a setting that skips validation.
+
+Open `https://YOUR_CHOSEN_HOST/dashboard`, replacing `YOUR_CHOSEN_HOST` with the exact chosen name/IP. There must be no certificate warning. Sign in, check statuses, log out and confirm private values disappear. Confirm the fifteen-minute session expires, source values expire after their source stops, and reconnection requires new evidence. Indoor must remain not integrated. Keep the phone on the same private Wi-Fi; guest client isolation may block access.
+
+## 19. Record physical acceptance and recovery
+
+**On the Pi and phone:** Work through [recognition qualification](../recognition/QUALIFICATION.md), [GNSS checks](../navigation/README.md) once the board is identified, and [caregiver acceptance](../caregiver/README.md). Record real OS/package/model versions, camera sensor, sound adapter/rates, power/cooling, actual test conditions and failures. Keep biometric samples, voices, real profiles/locations and private reports out of Git.
+
+Check one combined run, internet-disconnected operation while local Wi-Fi remains available, source loss/recovery, queued-speech expiry, stop while speaking, logout/reboot and the two-hour thermal/memory/latency gates. A healthy process and a short smoke test do not prove these passed.
+
+For rollback, **on your Pi:** stop the app service, confirm the process/device owners exited, and point the user unit back to a previously verified build/environment. Keep the private state and its reviewed backup; do not restore an unreviewed database over current profiles or install native packages under a running process. Disable the optional dashboard/Caddy service if only phone setup is failing. Use `systemctl --user status cognisight.service --no-pager` after restarting the selected known-good build. Do not delete locks blindly or run a second camera process to bypass a failed stop.
+
+**Expected:** Every acceptance row has a real result or an explicit pending reason, and recovery starts one known version without losing private data.
+**If any result is unclear:** Leave that row pending. Software can be complete while device qualification remains incomplete.
+
+## Reference notes
+
+These notes support the numbered procedure. Anything untested stays **pending**.
 
 ### Connection help
 

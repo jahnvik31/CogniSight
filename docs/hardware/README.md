@@ -1,6 +1,8 @@
 # Hardware setup and qualification
 
-Start with the [simple SSH runbook](PI-RUNBOOK.md). It uses `jahnvi@cognisight.local`, preserves the existing Pi installation and gives expected results and failure actions for each step. Read [the approved scope](ISSUE-7-PLAN.md) for detailed constraints.
+Start with the [simple SSH runbook](PI-RUNBOOK.md). It uses `jahnvi@cognisight.local`, preserves the existing Pi installation and gives expected results and failure actions for each step. Read [the approved scope](ISSUE-7-PLAN.md) for detailed constraints, and
+[current validation](../VALIDATION.md) for actual software evidence. Device work
+begins with the existing OS and preserves private state.
 
 **Physical acceptance is pending.** These tools have been tested with synthetic inputs on the development computer, not the user's Pi. Issue #7 still needs real camera detection, a visible preview, a captured still, native model execution and observed performance. No device or OS compatibility is certified here.
 

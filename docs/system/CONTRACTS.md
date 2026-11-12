@@ -203,6 +203,13 @@ are failure, not clean shutdown; process supervision owns recovery. A stuck came
 reader cannot be replaced with a second owner. No native library changes occur
 under a running process. Actual Pi shutdown timing remains an acceptance gate.
 
+## Operator handoff
+
+The [simple Pi runbook](../hardware/PI-RUNBOOK.md) is the ordered setup procedure.
+[Validation](../VALIDATION.md) records software results and the remaining hardware
+checks. #8 integration tests exercise available-module flows with labelled
+synthetic inputs; they do not make those inputs real camera or receiver evidence.
+
 ## Evidence and extension rules
 
 `tests/test_contracts.py` exercises stable/validated identity, subscriber isolation

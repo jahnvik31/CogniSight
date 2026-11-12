@@ -4,6 +4,12 @@
 
 [Issue #4](https://github.com/jahnvik31/CogniSight/issues/4) calls for recognition/context, outdoor location/time, separate indoor status, honest missing/stale/mock states, tests and setup documentation. Cross-module integration remains coordinated through #6. The source issue snapshot consulted on 12 November 2026 was approximately two weeks old; the current repository is the implementation source of truth.
 
+**Current software status, 12 November 2026:** the implemented provider, projection,
+authentication, UI and proxy boundary follow this specification. See
+[validation](../VALIDATION.md) for the latest actual test/build results, and the
+[Pi runbook](../hardware/PI-RUNBOOK.md) for remaining physical setup. Historical
+planning language below is not an outstanding approval request.
+
 ## 1. Resulting behavior and boundaries
 
 The dashboard contains four clearly separated cards: recognized people and verified context, outdoor GPS fix/status, indoor integration status, and device health. A successful page refresh means only that the dashboard backend responded; it is not proof that the camera or receiver progressed, that a location is accurate, or that the wearer is safe.
@@ -73,7 +79,10 @@ The dashboard does not open internet access, configure the router, install a pho
 4. **Verified source integration:** recognition snapshot derives from actual runtime progress and approved profiles. GPSD location/status snapshot retains real-source mode and `last_known`; unconfigured receiver means disconnected/unavailable rather than a mock fix. Indoor remains not integrated. Coordinate external contracts through #6; do not claim receiver compatibility from parser tests.
 5. **Pi/phone qualification:** production-server proxy path, trusted certificates, real browser behavior, actual GNSS and camera integration, failure isolation and combined resource/latency measurements must be executed before declaring issue #4 complete.
 
-Implementation and tests exist for these software surfaces. Flask integration checks are currently dependency-gated on the development host; no phone, TLS proxy, Pi-native or hardware acceptance result has been claimed. Each verified change is intended for a separate local commit by the primary agent; publishing and merge require working GitHub connectivity and the user's authorized workflow.
+Implementation and tests exist for these software surfaces. The latest Flask integration-check results and any dependency gates are recorded
+in docs/VALIDATION.md; no phone, TLS proxy, Pi-native or hardware acceptance result has been claimed. Verified changes are committed under the user's supplied identity; this release
+has explicit push-to-main authorization, while actual publication requires working
+GitHub connectivity.
 
 ## 6. Release acceptance matrix
 

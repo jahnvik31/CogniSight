@@ -1,6 +1,12 @@
 # CogniSight SSH runbook editorial outline — not deployment instructions
 
-The final instruction guide is [PI-RUNBOOK.md](../hardware/PI-RUNBOOK.md). #6/#7 software implementation is approved and present; actual device execution remains pending. This original editorial outline is retained as background, not current installation instructions. This file is an editorial checklist for that guide, not a second set of instructions. If details differ, reconcile the instruction guide before use. This is the proposed shape of the final simple-English runbook. It has not been executed on a Raspberry Pi. Commands using confirmed existing CLI names below are examples for review; setup/install/GNSS commands will be completed only after the real device details are known and the plans are approved. Never paste passwords, private keys, caregiver records, face data or private logs into chat/Git.
+The final operator procedure is [PI-RUNBOOK.md](../hardware/PI-RUNBOOK.md).
+This original editorial outline is retained only as background, not a second set
+of installation instructions. #6/#7 software implementation is approved and
+present; actual Pi/phone execution remains pending. Use the final runbook for
+commands, [contracts](CONTRACTS.md) for interfaces, and
+[validation](../VALIDATION.md) for current software evidence. Never put passwords,
+private keys, caregiver records, biometric data or private logs in chat/Git.
 
 ## Details needed before the final guide
 

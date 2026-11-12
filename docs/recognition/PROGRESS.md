@@ -1,7 +1,26 @@
 # Implementation ledger — docs/recognition/PLAN.md
 
+**Current status, 12 November 2026:** this is a chronological historical ledger.
+Old instructions, environments and test counts below describe their dated phases;
+they are not current approval gates. The user supplied the author identity
+`jahnvik31 <jahnvikotangale@gmail.com>`, approved #6/#7 and authorized completing
+remaining software and a push to main. [Validation](../VALIDATION.md) records the
+latest executed checks. Use the [Pi runbook](../hardware/PI-RUNBOOK.md) for physical
+work; indoor #5 stays deferred.
+
+## Current implemented scope
+
+Recognition/context, local GPSD positioning, the read-only caregiver app, stable
+isolated events, cached source-age projections, single speech/camera ownership,
+shutdown failure propagation, isolated native diagnostics and measured smoke
+reporting are present. Available-module end-to-end integration is covered under
+#8. Device setup, calibration and actual measurements remain separate acceptance
+gates. No historical pass count below certifies the present checkout.
+
+## Historical entries
+
 - Branch: feat/2-contextual-recognition; source checkout initially clean.
-- User explicitly withdrew commit identity. NO COMMITS until new author supplied.
+- Initially the user withdrew commit identity; later supplied identity is recorded above.
 - Network DNS blocks pip installs; local Python 3.9.6 lacks numpy/Flask/pytest.
 - Ruling: use unittest-compatible tests, also discoverable by pytest. Real
   dependency integration checks are explicit skips when unavailable; no fake
@@ -90,5 +109,5 @@ prepared locally; publishing/PR requires a valid GitHub login and network access
   Connected refresh now precedes one-second recognition expiry; failure retries
   stay five seconds. No stale-data retention or new data claims were introduced.
 
-- Latest user instruction: keep commits local; defer any push to main until all
-  issues have been looked after. No remote push performed in this phase.
+- At that earlier phase the user deferred pushing. The current release now has
+  explicit push-to-main authorization; consult the actual push result.

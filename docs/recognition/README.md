@@ -5,17 +5,23 @@ Local policy tests exercise storage, matching, tracking, context, queueing and
 security. They do not establish biometric accuracy, model inference performance,
 headset behavior, or suitability for an individual wearer.
 
+Use the [simple Pi runbook](../hardware/PI-RUNBOOK.md) as the ordered operator
+procedure. This module guide explains settings and behavior. The latest software
+checks and unresolved environment limits are in [validation](../VALIDATION.md).
+
 ## Hardware and software baseline
 
 - Raspberry Pi 5, 8 GB; suitable power supply and cooling for sustained inference.
 - Camera Module 2 with a standard 15-pin to mini 22-pin CSI cable. Power off before
   connecting. Use either CAM/DISP connector. Record the sensor actually detected.
-- USB headset with both microphone and playback. Pi 5 has no analogue audio jack.
-  Wired earphones need a USB adapter supporting microphone input, not output only.
+- The owned headset/earphones use AUX. Pi 5 has no analogue audio jack; select a
+  compatible USB sound adapter with output and, when the headset has a mic, a
+  matching microphone input. An output-only adapter cannot provide voice commands.
 - Initial qualification baseline: 64-bit Raspberry Pi OS Bookworm and its system
   Python 3.11. Other OS/Python combinations need their own qualification; do not
   replace an existing OS automatically. Native camera packages must match Python.
-- A monitor/browser on the Pi for caregiver setup. The wearer uses audio only.
+- A monitor is needed for the human-visible camera preview check. Local enrollment
+  can use the Pi browser or the laptop SSH tunnel in the runbook; the wearer uses audio.
 
 Official references:
 [Camera installation](https://www.raspberrypi.com/documentation/accessories/camera-software.html),
@@ -54,7 +60,8 @@ Install models explicitly:
 
 ```sh
 python scripts/fetch_models.py --destination models
-cp config.example.json config.json
+cp -n config.example.json config.json
+chmod 600 config.json
 ```
 
 The fetcher records source revisions and SHA-256 hashes in models/manifest.json.
@@ -205,15 +212,15 @@ The broad ranges in pyproject.toml are not a claim of a qualified environment.
 ## Operation and recovery
 
 The runtime alone owns the camera. Its latest-frame mailbox drops superseded
-frames; capture is 640x480/15 FPS, recognition targets 5 Hz and up to four faces.
+frames; capture requests 640x480/15 FPS, and recognition targets 5 Hz and up to four faces.
 Inference may be slower: measurement is mandatory. Models use CPU only.
 Enrollment and inference are serialized. Gallery snapshots refresh after edits.
 
 Headset routes require explicit USB names. Disconnects clear pending speech and
 retry every five seconds; there is no default-speaker fallback. A changed index
 requires reconnection. Missing camera/model/dependency/storage appears as degraded
-health; no synthetic “live” recognition is substituted. Camera restart is bounded
-and cannot create a second owner. Logs rotate at 1 MB with three backups and omit
+health; no synthetic “live” recognition is substituted. Camera retries refuse a second owner; native driver calls may still hang and
+require process-supervisor recovery. Logs rotate at 1 MB with three backups and omit
 names, context, vectors, and transcripts. Use the health page/doctor for diagnosis.
 
 For startup on boot, adapt deploy/cognisight.service paths to your checkout,
@@ -229,8 +236,9 @@ Recognition events carry schema version, event ID, track/person ID, confirmed/lo
 state, optional UTC and model version. Events contain no images, vectors or profile
 notes. Runtime.subscribe returns a bounded module-local queue; callers must handle
 old events being dropped and unsubscribe when done. Health is available via
-Runtime.status. This is not a new shared HTTP API or message broker. Agree external
-interfaces with Jahnvi through #6 before cross-module integration.
+Runtime.status. There is no new message broker. [System contracts](../system/CONTRACTS.md) document
+the implemented schema-1 boundaries and #8 integration checks; coordinate future
+interface changes with Jahnvi rather than silently redefining them.
 
 ## Pi contributor setup and native diagnostics
 

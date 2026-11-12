@@ -7,7 +7,9 @@ walking routes, an emergency service, or proof that the wearer is safe.
 
 Implementation exists; **Pi, GNSS receiver, phone browser, certificates, native
 recognition/audio and combined-load qualification have not been performed here**.
-Missing dependencies are explicit test skips. See ISSUE-4-PLAN.md for the full
+Latest executed software checks and any dependency skips are recorded in
+[validation](../VALIDATION.md). Start with the [Pi runbook](../hardware/PI-RUNBOOK.md).
+See ISSUE-4-PLAN.md for the full
 specification and acceptance gates. Local setup/enrollment stays on port 8765;
 the dashboard backend stays on loopback port 8766. Do not proxy 8765.
 
@@ -108,8 +110,9 @@ banner and mock labels. Live-data failures never automatically switch to mock da
 PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_caregiver*.py' -v
 ```
 
-Rerun with Flask dependencies installed; the native browser integration tests
-must not remain skipped for release. On the real Pi/phone, verify trusted TLS,
+Run the complete suite with Flask/Flask-WTF/Waitress installed; software web
+checks must not remain skipped for release. Flask test-client checks exercise
+authentication/projection, not a physical phone or TLS handshake. On the real Pi/phone, verify trusted TLS,
 login/logout/session expiry, invalid Host/Origin rejection, no enrollment URLs,
 no external requests, keyboard/zoom/reflow, and source disconnection/recovery.
 Measure dashboard render delay and total system load with recognition/audio
