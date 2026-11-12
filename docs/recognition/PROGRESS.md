@@ -51,3 +51,14 @@ on the development machine because required dependencies could not be installed.
 Available tests explicitly report these dependency skips. Qualification helper
 ran metadata-only and correctly retained release_qualified=false. Issue update
 prepared locally; publishing/PR requires a valid GitHub login and network access.
+
+## Phase 2 — qualification hardening
+
+- User authorized fresh #3 and #4 implementation in parallel, sequential local
+  commits under jahnvik31, and a final push to main after completion.
+- Qualification gates now enforce every stop trial within one second and correct;
+  command accuracy must pass for every speaker, intent, and speaker/intent pair.
+- Failed headset smoke checks exit nonzero. Qualification reports are atomic,
+  private, and cannot clobber input files or symlink targets.
+- Validation: 87 tests run, 80 pass, seven dependency skips. All new acceptance
+  regressions were observed failing before the fix. No target hardware claims.

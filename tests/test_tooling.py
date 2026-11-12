@@ -2,6 +2,8 @@
 
 import importlib.util
 import io
+import contextlib
+import os
 import hashlib
 import json
 import stat
@@ -41,7 +43,10 @@ class ArchiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             files = fetch.safe_extract(
-                self.archive([("model/conf/a.conf", b"hello"), ("model/am/a.mdl", b"world")]), root
+                self.archive(
+                    [("model/conf/a.conf", b"hello"), ("model/am/a.mdl", b"world")]
+                ),
+                root,
             )
             self.assertEqual(
                 sorted(p.relative_to(root).as_posix() for p in files),
@@ -58,20 +63,28 @@ class ArchiveTests(unittest.TestCase):
         link.create_system = 3
         link.external_attr = (stat.S_IFLNK | 0o777) << 16
         for name in ("../escaped", "/absolute", "C:/windows", "model\\escape", link):
-            with self.subTest(name=str(name)), tempfile.TemporaryDirectory() as directory:
+            with (
+                self.subTest(name=str(name)),
+                tempfile.TemporaryDirectory() as directory,
+            ):
                 with self.assertRaises(ValueError):
-                    fetch.safe_extract(self.archive([(name, b"target")]), Path(directory))
+                    fetch.safe_extract(
+                        self.archive([(name, b"target")]), Path(directory)
+                    )
 
     def test_extraction_size_limit_and_duplicate_paths_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ValueError):
                 fetch.safe_extract(
-                    self.archive([("model/large", b"12345")]), Path(directory), max_total=4
+                    self.archive([("model/large", b"12345")]),
+                    Path(directory),
+                    max_total=4,
                 )
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ValueError):
                 fetch.safe_extract(
-                    self.archive([("model/a", b"a"), ("model/a", b"b")]), Path(directory)
+                    self.archive([("model/a", b"a"), ("model/a", b"b")]),
+                    Path(directory),
                 )
 
     def test_hosts_and_redirects_require_official_https(self):
@@ -117,9 +130,14 @@ class FetchPipelineTests(unittest.TestCase):
             digest = hashlib.sha256(payload).hexdigest()
             remote = "models/" + folder + "/" + name
             responses[
-                "https://raw.githubusercontent.com/opencv/opencv_zoo/" + commit + "/" + remote
+                "https://raw.githubusercontent.com/opencv/opencv_zoo/"
+                + commit
+                + "/"
+                + remote
             ] = (
-                "version https://git-lfs.github.com/spec/v1\noid sha256:" + digest + "\nsize 1\n"
+                "version https://git-lfs.github.com/spec/v1\noid sha256:"
+                + digest
+                + "\nsize 1\n"
             ).encode()
             responses[
                 "https://media.githubusercontent.com/media/opencv/opencv_zoo/"
@@ -128,14 +146,24 @@ class FetchPipelineTests(unittest.TestCase):
                 + remote
             ] = (b"corrupt" if broken else payload)
         siblings = []
-        for name in ("en_US-lessac-medium.onnx", "en_US-lessac-medium.onnx.json", "MODEL_CARD"):
+        for name in (
+            "en_US-lessac-medium.onnx",
+            "en_US-lessac-medium.onnx.json",
+            "MODEL_CARD",
+        ):
             payload = ("fixture-voice-" + name).encode()
             remote = fetch.PIPER_PREFIX + name
             siblings.append(
-                {"rfilename": remote, "lfs": {"sha256": hashlib.sha256(payload).hexdigest()}}
+                {
+                    "rfilename": remote,
+                    "lfs": {"sha256": hashlib.sha256(payload).hexdigest()},
+                }
             )
             responses[
-                "https://huggingface.co/rhasspy/piper-voices/resolve/" + revision + "/" + remote
+                "https://huggingface.co/rhasspy/piper-voices/resolve/"
+                + revision
+                + "/"
+                + remote
             ] = payload
         responses[
             "https://huggingface.co/api/models/rhasspy/piper-voices/revision/main?blobs=true"
@@ -152,13 +180,17 @@ class FetchPipelineTests(unittest.TestCase):
         responses = self.fixtures()
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "models"
-            with patch.object(fetch, "request", side_effect=lambda url: io.BytesIO(responses[url])):
+            with patch.object(
+                fetch, "request", side_effect=lambda url: io.BytesIO(responses[url])
+            ):
                 manifest = fetch.fetch(destination)
             self.assertTrue((destination / "manifest.json").is_file())
             self.assertEqual(len(manifest["files"]), 6)
             for item in manifest["files"]:
                 self.assertEqual(
-                    hashlib.sha256((destination / item["path"]).read_bytes()).hexdigest(),
+                    hashlib.sha256(
+                        (destination / item["path"]).read_bytes()
+                    ).hexdigest(),
                     item["sha256"],
                 )
             self.assertTrue(manifest["model_version"].startswith("sface:"))
@@ -170,7 +202,9 @@ class FetchPipelineTests(unittest.TestCase):
         responses = self.fixtures(broken=True)
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "models"
-            with patch.object(fetch, "request", side_effect=lambda url: io.BytesIO(responses[url])):
+            with patch.object(
+                fetch, "request", side_effect=lambda url: io.BytesIO(responses[url])
+            ):
                 with self.assertRaises(ValueError):
                     fetch.fetch(destination)
             self.assertFalse(destination.exists())
@@ -182,11 +216,25 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(qualify.percentile([10, 20, 30, 40, 50], 0.95), 50)
         with self.assertRaises(ValueError):
             qualify.evaluate_trials(
-                [{"kind": "recognition", "encounter_id": "1", "correct": "1", "latency_ms": "nan"}]
+                [
+                    {
+                        "kind": "recognition",
+                        "encounter_id": "1",
+                        "correct": "1",
+                        "latency_ms": "nan",
+                    }
+                ]
             )
 
     def test_duplicate_encounters_do_not_inflate_unknown_evidence(self):
-        rows = [{"kind": "unknown", "encounter_id": "same", "correct": "1", "latency_ms": ""}] * 300
+        rows = [
+            {
+                "kind": "unknown",
+                "encounter_id": "same",
+                "correct": "1",
+                "latency_ms": "",
+            }
+        ] * 300
         result = qualify.evaluate_trials(rows)
         self.assertEqual(result["unknown"]["count"], 1)
         self.assertFalse(result["unknown"]["acceptance_passed"])
@@ -215,7 +263,12 @@ class QualificationTests(unittest.TestCase):
 
     def test_all_unknown_trials_pass_only_as_observed_test_evidence(self):
         rows = [
-            {"kind": "unknown", "encounter_id": str(i), "correct": "1", "latency_ms": ""}
+            {
+                "kind": "unknown",
+                "encounter_id": str(i),
+                "correct": "1",
+                "latency_ms": "",
+            }
             for i in range(300)
         ]
         report = qualify.evaluate_trials(rows)
@@ -245,6 +298,160 @@ class QualificationTests(unittest.TestCase):
         self.assertFalse(report["release_qualified"])
         self.assertNotIn("hostname", report)
         self.assertNotIn("serial", report)
+
+
+class QualificationGateRegressionTests(unittest.TestCase):
+    def stop_trials(self, count=20):
+        return [
+            {
+                "kind": "stop",
+                "encounter_id": str(index),
+                "correct": "1",
+                "latency_ms": "500",
+            }
+            for index in range(count)
+        ]
+
+    def command_trials(self, speaker, samples=20):
+        return [
+            {
+                "kind": "command",
+                "encounter_id": f"{speaker}-{intent}-{index}",
+                "correct": "1",
+                "latency_ms": "500",
+                "speaker_id": speaker,
+                "intent": intent,
+            }
+            for intent in qualify.INTENTS
+            for index in range(samples)
+        ]
+
+    def test_every_stop_trial_must_meet_deadline_not_just_percentile(self):
+        rows = self.stop_trials()
+        rows[-1]["latency_ms"] = "1001"
+        result = qualify.evaluate_trials(rows)["stop"]
+        self.assertEqual(result["p95_latency_ms"], 500)
+        self.assertFalse(result["acceptance_passed"])
+        self.assertEqual(result["max_latency_ms"], 1001)
+
+    def test_every_stop_trial_must_succeed(self):
+        rows = self.stop_trials()
+        rows[-1]["correct"] = "0"
+        self.assertFalse(qualify.evaluate_trials(rows)["stop"]["acceptance_passed"])
+        self.assertTrue(
+            qualify.evaluate_trials(self.stop_trials(1))["stop"]["acceptance_passed"]
+        )
+        self.assertFalse(qualify.evaluate_trials([])["stop"]["acceptance_passed"])
+
+    def test_command_accuracy_cannot_hide_one_bad_intent(self):
+        rows = self.command_trials("speaker-private-id")
+        rows[0]["correct"] = rows[1]["correct"] = "0"
+        result = qualify.evaluate_trials(rows)["command"]
+        self.assertGreater(result["accuracy"], 0.95)
+        self.assertFalse(result["acceptance_passed"])
+        self.assertEqual(result["intent_groups_failed"], 1)
+        self.assertNotIn("speaker-private-id", json.dumps(result))
+
+    def test_command_accuracy_cannot_hide_one_bad_speaker(self):
+        rows = self.command_trials("wearer-private-id")
+        for index, row in enumerate(rows):
+            if index % 20 < 2:
+                row["correct"] = "0"
+        rows += self.command_trials("other-private-id", samples=200)
+        result = qualify.evaluate_trials(rows)["command"]
+        self.assertGreater(result["accuracy"], 0.95)
+        self.assertFalse(result["acceptance_passed"])
+        self.assertEqual(result["speaker_groups_failed"], 1)
+        self.assertNotIn("wearer-private-id", json.dumps(result))
+        self.assertNotIn("other-private-id", json.dumps(result))
+
+    def test_command_gate_rejects_a_bad_speaker_intent_cell(self):
+        rows = self.command_trials("wearer-a") + self.command_trials("wearer-b")
+        rows[0]["correct"] = rows[1]["correct"] = "0"
+        result = qualify.evaluate_trials(rows)["command"]
+        self.assertFalse(result["acceptance_passed"])
+        self.assertEqual(result["speaker_intent_groups_failed"], 1)
+        good = qualify.evaluate_trials(self.command_trials("wearer-a"))["command"]
+        self.assertTrue(good["acceptance_passed"])
+
+
+class QualificationReportRegressionTests(unittest.TestCase):
+    def test_failed_audio_smoke_is_nonzero_with_reported_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "report.json"
+            smoke = {
+                "camera_inference": {"state": "smoke_passed"},
+                "audio": {"state": "failed"},
+            }
+            with (
+                patch.object(qualify, "smoke", return_value=smoke),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                result = qualify.main(
+                    [
+                        "--config",
+                        str(Path(directory) / "config.json"),
+                        "--output",
+                        str(output),
+                    ]
+                )
+            self.assertNotEqual(result, 0)
+            report = json.loads(output.read_text())
+            self.assertEqual(report["smoke"]["audio"]["state"], "failed")
+            self.assertFalse(report["release_qualified"])
+
+    def test_report_is_atomic_private_and_replaces_only_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "report.json"
+            qualify.write_report(output, {"state": "pending"})
+            self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
+            with self.assertRaises(ValueError):
+                qualify.write_report(output, {"measurement": float("nan")})
+            self.assertEqual(json.loads(output.read_text()), {"state": "pending"})
+            self.assertEqual(list(Path(directory).iterdir()), [output])
+
+    def test_report_rejects_symlink_without_touching_link_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.json"
+            source.write_text("private source")
+            output = Path(directory) / "report.json"
+            output.symlink_to(source)
+            with self.assertRaises(ValueError):
+                qualify.write_report(output, {"state": "pending"})
+            self.assertTrue(output.is_symlink())
+            self.assertEqual(source.read_text(), "private source")
+
+    def test_report_cannot_overwrite_config_trials_or_hardlink_alias(self):
+        for option in ("--config", "--trials"):
+            for hardlink in (False, True):
+                with (
+                    self.subTest(option=option, hardlink=hardlink),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    source = Path(directory) / "source"
+                    source.write_text("original private source")
+                    output = Path(directory) / "report.json" if hardlink else source
+                    if hardlink:
+                        os.link(source, output)
+                    with (
+                        patch.object(
+                            qualify,
+                            "smoke",
+                            return_value={
+                                "camera_inference": {"state": "smoke_passed"},
+                                "audio": {"state": "pending_interactive_check"},
+                            },
+                        ) as smoke,
+                        contextlib.redirect_stdout(io.StringIO()),
+                        contextlib.redirect_stderr(io.StringIO()),
+                    ):
+                        result = qualify.main(
+                            [option, str(source), "--output", str(output)]
+                        )
+                    self.assertNotEqual(result, 0)
+                    self.assertEqual(source.read_text(), "original private source")
+                    self.assertEqual(output.read_text(), "original private source")
+                    smoke.assert_not_called()
 
 
 if __name__ == "__main__":

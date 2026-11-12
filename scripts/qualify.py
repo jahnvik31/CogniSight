@@ -19,6 +19,7 @@ import resource
 import subprocess
 import sys
 import time
+import tempfile
 from collections import Counter
 from pathlib import Path
 
@@ -47,10 +48,16 @@ def evaluate_trials(rows):
         if latency is not None and (not math.isfinite(latency) or latency < 0):
             raise ValueError("latency_ms must be finite and nonnegative")
         if kind != "unknown" and latency is None:
-            raise ValueError("Timing is required for recognition, command, and stop trials")
-        intent, speaker = (row.get("intent") or "").strip(), (row.get("speaker_id") or "").strip()
+            raise ValueError(
+                "Timing is required for recognition, command, and stop trials"
+            )
+        intent, speaker = (row.get("intent") or "").strip(), (
+            row.get("speaker_id") or ""
+        ).strip()
         if kind == "command" and (intent not in INTENTS or not speaker):
-            raise ValueError("Command trials require a supported intent and opaque speaker_id")
+            raise ValueError(
+                "Command trials require a supported intent and opaque speaker_id"
+            )
         value = (row["correct"] == "1", latency, intent, speaker)
         key = (kind, encounter)
         if key in seen:
@@ -72,6 +79,7 @@ def evaluate_trials(rows):
             "correct": correct,
             "accuracy": correct / count if count else None,
             "p95_latency_ms": percentile(latencies),
+            "max_latency_ms": max(latencies) if latencies else None,
         }
         if kind == "unknown":
             result["false_named_announcements"] = count - correct
@@ -85,15 +93,57 @@ def evaluate_trials(rows):
             covered = bool(speakers) and all(
                 coverage[(s, i)] >= 20 for s in speakers for i in INTENTS
             )
-            result["speakers_count"] = len(speakers)
-            result["per_speaker_intent_coverage_passed"] = covered
+            # Aggregate accuracy can conceal a failing wearer or command. Keep
+            # identifiers internal; publish only group counts and worst accuracy.
+            cells_correct = Counter((t[3], t[2]) for t in trials if t[0])
+            speaker_count = Counter(t[3] for t in trials)
+            speaker_correct = Counter(t[3] for t in trials if t[0])
+            intent_count = Counter(t[2] for t in trials)
+            intent_correct = Counter(t[2] for t in trials if t[0])
+            speaker_rates = [
+                speaker_correct[key] / total for key, total in speaker_count.items()
+            ]
+            intent_rates = [
+                intent_correct[key] / total for key, total in intent_count.items()
+            ]
+            cell_rates = [cells_correct[key] / total for key, total in coverage.items()]
+            speaker_failed = sum(rate < 0.95 for rate in speaker_rates)
+            intent_failed = sum(rate < 0.95 for rate in intent_rates)
+            cell_failed = sum(rate < 0.95 for rate in cell_rates)
+            result.update(
+                {
+                    "speakers_count": len(speakers),
+                    "per_speaker_intent_coverage_passed": covered,
+                    "speaker_groups_evaluated": len(speaker_rates),
+                    "speaker_groups_failed": speaker_failed,
+                    "intent_groups_evaluated": len(intent_rates),
+                    "intent_groups_failed": intent_failed,
+                    "speaker_intent_groups_evaluated": len(cell_rates),
+                    "speaker_intent_groups_failed": cell_failed,
+                    "min_speaker_accuracy": (
+                        min(speaker_rates) if speaker_rates else None
+                    ),
+                    "min_intent_accuracy": min(intent_rates) if intent_rates else None,
+                    "min_speaker_intent_accuracy": (
+                        min(cell_rates) if cell_rates else None
+                    ),
+                }
+            )
             result["acceptance_passed"] = bool(
-                count and covered and correct / count >= 0.95 and percentile(latencies) <= 2000
+                count
+                and covered
+                and not (speaker_failed or intent_failed or cell_failed)
+                and percentile(latencies) <= 2000
+            )
+        elif kind == "stop":
+            # Every observed stop must work within one second. A percentile may
+            # describe timings, but may not hide failed or delayed interruption.
+            result["acceptance_passed"] = bool(
+                count and correct == count and max(latencies) <= 1000
             )
         else:
-            limit = 3000 if kind == "recognition" else 1000
             result["acceptance_passed"] = bool(
-                count and correct / count >= 0.95 and percentile(latencies) <= limit
+                count and correct / count >= 0.95 and percentile(latencies) <= 3000
             )
         report[kind] = result
     return report
@@ -235,7 +285,9 @@ def smoke(config_path, seconds, interactive=False):
         vision.close()
     if interactive:
         if not sys.stdin.isatty():
-            raise ValueError("--interactive requires a terminal and a human headset check")
+            raise ValueError(
+                "--interactive requires a terminal and a human headset check"
+            )
         from cognisight.recognition.audio import AudioEngine
 
         health, commands = {}, []
@@ -254,12 +306,16 @@ def smoke(config_path, seconds, interactive=False):
             else:
                 audio.say("This is the headset qualification check.")
                 heard = (
-                    input("Did you hear the check through the selected USB headset? [y/N] ")
+                    input(
+                        "Did you hear the check through the selected USB headset? [y/N] "
+                    )
                     .strip()
                     .lower()
                     == "y"
                 )
-                print("Speak one supported prefixed command into the headset within ten seconds.")
+                print(
+                    "Speak one supported prefixed command into the headset within ten seconds."
+                )
                 deadline = time.monotonic() + 10
                 while not commands and time.monotonic() < deadline:
                     time.sleep(0.1)
@@ -272,6 +328,47 @@ def smoke(config_path, seconds, interactive=False):
         finally:
             audio.close()
     return result
+
+
+def _validate_report_destination(destination, protected_paths=()):
+    destination = Path(destination)
+    if destination.is_symlink() or (destination.exists() and not destination.is_file()):
+        raise ValueError(
+            "Report destination must be a regular file, not a link or directory"
+        )
+    resolved = destination.resolve()
+    for source in protected_paths:
+        if source is None:
+            continue
+        source = Path(source)
+        if resolved == source.resolve() or (
+            destination.exists() and source.exists() and destination.samefile(source)
+        ):
+            raise ValueError("Report must not overwrite config or source trials")
+
+
+def write_report(destination, report, protected_paths=()):
+    """Publish mode-0600 JSON atomically; never follow a target link or clobber input."""
+    destination = Path(destination)
+    _validate_report_destination(destination, protected_paths)
+    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor, name = tempfile.mkstemp(
+        prefix=".qualification-report-", dir=str(destination.parent)
+    )
+    try:
+        with os.fdopen(descriptor, "w") as output:
+            os.fchmod(output.fileno(), 0o600)
+            json.dump(report, output, indent=2, allow_nan=False)
+            output.write("\n")
+            output.flush()
+            os.fsync(output.fileno())
+        _validate_report_destination(destination, protected_paths)
+        # Replace the directory entry; never open an existing destination for
+        # writing. If a symlink races this check, its target is still untouched.
+        os.replace(name, destination)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
 
 
 def main(argv=None):
@@ -288,7 +385,9 @@ def main(argv=None):
         help="Explicit headset playback/microphone human check",
     )
     parser.add_argument(
-        "--trials", type=Path, help="Anonymous held-out trial CSV; never names/recordings"
+        "--trials",
+        type=Path,
+        help="Anonymous held-out trial CSV; never names/recordings",
     )
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
@@ -296,6 +395,15 @@ def main(argv=None):
         parser.error("--seconds must be between 1 and 7200")
     if args.interactive and not args.config:
         parser.error("--interactive requires --config")
+    protected_paths = (args.config, args.trials)
+    try:
+        _validate_report_destination(args.output, protected_paths)
+    except (OSError, ValueError):
+        print(
+            "Qualification output rejected; preserve input files and use a regular report path.",
+            file=sys.stderr,
+        )
+        return 2
     report = hardware_report()
     code = 0
     if args.config:
@@ -306,6 +414,11 @@ def main(argv=None):
                 report["acceptance"]["recognition_inference"] = "smoke_passed"
             if report["smoke"]["audio"]["state"] == "smoke_passed":
                 report["acceptance"]["usb_capture_playback"] = "smoke_passed"
+            elif report["smoke"]["audio"]["state"] == "failed":
+                report["acceptance"]["usb_capture_playback"] = "failed"
+                code = 1
+            if report["smoke"]["camera_inference"]["state"] == "failed":
+                code = 1
         except Exception as exc:
             # Exceptions can carry local paths or data; report type only.
             report["smoke"] = {
@@ -325,11 +438,17 @@ def main(argv=None):
             }
             code = 1
     # No script can turn a short smoke check into full hardware certification.
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("w") as output:
-        json.dump(report, output, indent=2)
-        output.write("\n")
-    print("Qualification evidence written; release acceptance remains pending unmeasured gates.")
+    try:
+        write_report(args.output, report, protected_paths)
+    except (OSError, ValueError, TypeError, OverflowError):
+        print(
+            "Qualification report not written; check output permissions and report values.",
+            file=sys.stderr,
+        )
+        return 2
+    print(
+        "Qualification evidence written; release acceptance remains pending unmeasured gates."
+    )
     return code
 
 
