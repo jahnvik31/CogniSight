@@ -16,13 +16,17 @@ PROBES = {
     "waitress": ("waitress",),
 }
 
-# Child stdout/stderr are captured by the parent, never forwarded. The child
-# publishes only a fixed envelope; native diagnostics or exceptions stay private.
+# The child reserves a result descriptor, then discards Python AND native
+# stdout/stderr at their file descriptors. Only its small JSON envelope reaches
+# the parent pipe; binary native logs cannot break decoding or grow that pipe.
 _CHILD = r'''
-import contextlib, importlib, json, re, sys
+import contextlib, importlib, json, os, re, sys
+report_fd = os.dup(1)
 result = {"state": "passed", "error_type": None}
 try:
-    with open("/dev/null", "w") as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+    with open(os.devnull, "w") as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+        os.dup2(sink.fileno(), 1)
+        os.dup2(sink.fileno(), 2)
         modules = {name: importlib.import_module(name) for name in sys.argv[1:]}
         if "cv2" in modules:
             from cognisight.recognition.vision import Vision
@@ -35,7 +39,8 @@ except ModuleNotFoundError:
 except Exception as exc:
     name = type(exc).__name__
     result = {"state": "failed", "error_type": name if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", name) else "ImportError"}
-print(json.dumps(result))
+os.write(report_fd, json.dumps(result).encode("utf-8"))
+os.close(report_fd)
 '''
 
 
@@ -45,13 +50,16 @@ def _probe(name, timeout_seconds):
     try:
         child = subprocess.run(
             [sys.executable, "-c", _CHILD, *PROBES[name]],
-            capture_output=True, text=True, timeout=timeout_seconds, check=False,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=timeout_seconds, check=False,
         )
     except subprocess.TimeoutExpired:
         return {"state": "timeout", "error_type": "TimeoutExpired"}
     if child.returncode != 0:
         return {"state": "failed", "error_type": "ChildProcessError"}
     try:
+        if len(child.stdout) > 4096:
+            raise ValueError("Oversized probe response")
         result = json.loads(child.stdout)
         # Treat unexpected output as a failed probe, never copy it into reports.
         state, error = result["state"], result["error_type"]

@@ -76,3 +76,30 @@ class DiagnosticsTests(unittest.TestCase):
                 self.assertEqual(diagnostics._probe('cv2_numpy', 2)['state'], 'failed')
                 cv2.write_text('__version__ = "4.10.0"\nFaceDetectorYN = object()\nFaceRecognizerSF = object()')
                 self.assertEqual(diagnostics._probe('cv2_numpy', 2)['state'], 'passed')
+
+
+class NativeOutputBoundaryTests(unittest.TestCase):
+    def test_non_utf8_child_response_fails_without_aborting_report(self):
+        result = subprocess.CompletedProcess([], 0, b"\xffPRIVATE", b"\xfePRIVATE")
+        with patch.object(diagnostics.subprocess, "run", return_value=result):
+            self.assertEqual(diagnostics._probe("vosk", 1),
+                             {"state": "failed", "error_type": "InvalidProbeResponse"})
+
+    def test_native_file_descriptor_output_is_discarded_without_breaking_probe(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "vosk.py").write_text(
+                "import os; os.write(1, b'\\xffPRIVATE'); os.write(2, b'\\xfePRIVATE')"
+            )
+            with patch.dict(os.environ, {"PYTHONPATH": directory}):
+                self.assertEqual(diagnostics._probe("vosk", 2),
+                                 {"state": "passed", "error_type": None})
+
+    def test_oversized_child_envelope_is_rejected(self):
+        result = subprocess.CompletedProcess([], 0, b" " * 5000 +
+                                             b'{"state":"passed","error_type":null}', b"")
+        with patch.object(diagnostics.subprocess, "run", return_value=result):
+            self.assertEqual(diagnostics._probe("vosk", 1),
+                             {"state": "failed", "error_type": "InvalidProbeResponse"})

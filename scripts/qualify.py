@@ -467,6 +467,14 @@ def main(argv=None):
         try:
             with args.trials.open(newline="") as stream:
                 report["trials"] = evaluate_trials(csv.DictReader(stream))
+            measured = [report["trials"][kind] for kind in
+                        ("recognition", "command", "unknown", "stop")
+                        if report["trials"][kind]["count"]]
+            # Requesting trials must not report success for failed measurements
+            # or an empty file. Unmeasured categories remain pending, however;
+            # a passing unknown cohort does not require fabricated voice trials.
+            if not measured or any(not item["acceptance_passed"] for item in measured):
+                code = 1
         except (OSError, ValueError, csv.Error):
             report["trials"] = {
                 "state": "invalid",

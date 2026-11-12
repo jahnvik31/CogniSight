@@ -121,8 +121,12 @@ class Vision:
         return bool(match and int(match[1]) == 4 and int(match[2]) >= 10)
 
     def start(self):
-        if self._reader is not None and self._reader.is_alive():
-            raise RuntimeError("Camera reader already running; close it before restarting.")
+        if self._camera is not None or (
+            self._reader is not None and self._reader.is_alive()
+        ):
+            # Reader failure does not release Picamera2's device ownership.
+            # A retry must close that owner before creating another instance.
+            raise RuntimeError("Camera owner already exists; close it before restarting.")
         paths = []
         for key in ("detector_model", "recognizer_model"):
             value = self.config.get(key)

@@ -3,6 +3,7 @@
 import importlib.util
 import io
 import contextlib
+import csv
 import os
 import hashlib
 import json
@@ -452,6 +453,51 @@ class QualificationReportRegressionTests(unittest.TestCase):
                     self.assertEqual(source.read_text(), "original private source")
                     self.assertEqual(output.read_text(), "original private source")
                     smoke.assert_not_called()
+
+
+class TrialExitStatusTests(unittest.TestCase):
+    def run_trials(self, rows):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "trials.csv"
+            report_path = Path(directory) / "report.json"
+            with source.open("w", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=(
+                    "kind", "encounter_id", "correct", "latency_ms", "intent", "speaker_id"
+                ))
+                writer.writeheader()
+                writer.writerows(rows)
+            before = source.read_bytes()
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = qualify.main(["--trials", str(source), "--output", str(report_path)])
+            self.assertEqual(source.read_bytes(), before)
+            self.assertEqual(stat.S_IMODE(report_path.stat().st_mode), 0o600)
+            return code, json.loads(report_path.read_text())
+
+    def unknown_trials(self):
+        return [{"kind": "unknown", "encounter_id": str(i), "correct": "1"}
+                for i in range(300)]
+
+    def test_valid_csv_with_failed_measurements_exits_one_and_keeps_private_report(self):
+        rows = self.unknown_trials()
+        rows[-1]["correct"] = "0"
+        code, report = self.run_trials(rows)
+        self.assertEqual(code, 1)
+        self.assertFalse(report["trials"]["unknown"]["acceptance_passed"])
+        self.assertEqual(report["trials"]["unknown"]["false_named_announcements"], 1)
+        self.assertFalse(report["release_qualified"])
+
+    def test_passed_supplied_category_does_not_require_unmeasured_categories(self):
+        code, report = self.run_trials(self.unknown_trials())
+        self.assertEqual(code, 0)
+        self.assertTrue(report["trials"]["unknown"]["acceptance_passed"])
+        self.assertEqual(report["trials"]["recognition"]["count"], 0)
+        self.assertEqual(report["acceptance"]["held_out_accuracy"], "pending")
+        self.assertFalse(report["release_qualified"])
+
+    def test_empty_requested_trials_fail_instead_of_successful_no_evidence(self):
+        code, report = self.run_trials([])
+        self.assertEqual(code, 1)
+        self.assertEqual(report["trials"]["unknown"]["count"], 0)
 
 
 class MeasuredSmokeTests(unittest.TestCase):

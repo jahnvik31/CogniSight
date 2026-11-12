@@ -35,6 +35,16 @@ class CliTests(unittest.TestCase):
                 )
             self.assertFalse((Path(root) / "private").exists())
 
+    def test_password_longer_than_login_limit_is_rejected_before_state_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "private"
+            secret = "x" * 257
+            with patch("cognisight.recognition.cli.getpass.getpass", side_effect=[secret, secret]), \
+                    redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(main(["password", "--state-dir", str(state)]), 2)
+            self.assertFalse(state.exists())
+            self.assertNotIn(secret, output.getvalue())
+
     def test_password_rejects_repo_state_before_prompt_or_write(self):
         from unittest.mock import patch
         from cognisight.recognition.cli import validate_state_dir

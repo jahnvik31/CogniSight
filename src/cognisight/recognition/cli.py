@@ -318,16 +318,16 @@ def main(argv=None):
             return 0
         if args.command == "password":
             args.state_dir = validate_state_dir(args.state_dir)
+            secret = getpass.getpass(
+                "New caregiver password (12-256 characters): "
+            )
+            if not 12 <= len(secret) <= 256 or secret != getpass.getpass("Confirm password: "):
+                raise ValueError(
+                    "Passwords must match and contain 12-256 characters"
+                )
             from werkzeug.security import generate_password_hash
             from .web import private_secret
 
-            secret = getpass.getpass(
-                "New caregiver password (at least 12 characters): "
-            )
-            if len(secret) < 12 or secret != getpass.getpass("Confirm password: "):
-                raise ValueError(
-                    "Passwords must match and contain at least 12 characters"
-                )
             args.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
             path = args.state_dir / "password.hash"
             if path.is_symlink():

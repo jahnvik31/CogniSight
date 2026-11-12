@@ -70,6 +70,20 @@ class LatestFrameTests(unittest.TestCase):
 
 
 class VisionStartupTests(unittest.TestCase):
+    def test_dead_capture_reader_does_not_allow_replacing_open_camera(self):
+        # Capture failure can end the reader while Picamera2 still owns hardware.
+        vision = Vision({})
+        camera = object()
+        vision._camera = camera
+        reader = threading.Thread(target=lambda: None)
+        reader.start()
+        reader.join()
+        vision._reader = reader
+        with self.assertRaisesRegex(RuntimeError, "close it before restarting"):
+            vision.start()
+        self.assertIs(vision._camera, camera)
+        self.assertIs(vision._reader, reader)
+
     def test_missing_model_fails_before_hardware_import(self):
         with tempfile.TemporaryDirectory() as directory:
             v = Vision(
