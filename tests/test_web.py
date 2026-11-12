@@ -77,6 +77,20 @@ class Control:
 
 @unittest.skipUnless(HAS_WEB, "Flask/Flask-WTF unavailable; run after installing web dependencies")
 class WebTests(unittest.TestCase):
+    def test_csrf_tokens_expire_after_fifteen_minutes(self):
+        from flask_wtf.csrf import generate_csrf, validate_csrf
+        from wtforms import ValidationError
+        from unittest.mock import patch
+        import time
+
+        with self.app.test_request_context("/login"):
+            token = generate_csrf()
+            validate_csrf(token)
+            later = int(time.time()) + 901
+            with patch("itsdangerous.timed.TimestampSigner.get_timestamp", return_value=later):
+                with self.assertRaises(ValidationError):
+                    validate_csrf(token)
+
     def setUp(self):
         from werkzeug.security import generate_password_hash
         from cognisight.recognition.store import Store

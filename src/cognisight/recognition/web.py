@@ -104,7 +104,7 @@ def create_app(store, control, state_dir):
         SESSION_COOKIE_SECURE=False,  # loopback HTTP; never expose on a network
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=15),
         MAX_CONTENT_LENGTH=16 * 1024,
-        WTF_CSRF_TIME_LIMIT=timedelta(minutes=15),
+        WTF_CSRF_TIME_LIMIT=15 * 60,
     )
     limiter = LoginLimiter()
 

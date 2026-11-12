@@ -64,7 +64,7 @@ def create_dashboard_app(provider, state_dir, allowed_hosts):
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=15),
         SESSION_REFRESH_EACH_REQUEST=False,
         MAX_CONTENT_LENGTH=16 * 1024,
-        WTF_CSRF_TIME_LIMIT=timedelta(minutes=15),
+        WTF_CSRF_TIME_LIMIT=15 * 60,
     )
     # Exactly one local Caddy proxy; never trust forwarded host or prefix.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=0, x_proto=1, x_host=0, x_port=0, x_prefix=0)
