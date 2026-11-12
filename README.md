@@ -1,5 +1,7 @@
 # CogniSight
 
+**Next coding agent or device contributor:** read [NEXT_AGENT_README.md](NEXT_AGENT_README.md) first. It records the current plans, approval gates, hardware corrections and remaining tests.
+
 CogniSight is an assistive technology project intended to support people living with dementia through contextual recognition, navigation assistance, and caregiver support.
 
 ## Project Status
