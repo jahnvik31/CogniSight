@@ -39,3 +39,14 @@ Setup instructions will be added after the existing code has been audited and th
 ## Team
 
 This is a collaborative student project. Module ownership and contributions will be documented as integration progresses.
+
+## Facial recognition module (issue #2)
+
+A fresh offline recognition, verified-context, USB voice, and local enrollment
+implementation is available. See [setup and operation](docs/recognition/README.md),
+[approved plan](docs/recognition/PLAN.md), and
+[hardware qualification gates](docs/recognition/QUALIFICATION.md).
+
+**Hardware qualification is pending.** Local policy tests are not proof of Pi
+compatibility, recognition accuracy, or live audio performance. Existing modules
+remain independently owned; this addition does not integrate navigation.

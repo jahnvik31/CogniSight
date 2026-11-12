@@ -1,0 +1,22 @@
+[Unit]
+Description=CogniSight offline recognition and local enrollment
+After=sound.target
+
+[Service]
+Type=simple
+# Install as a user unit. Set paths for your own checkout/config before enabling.
+WorkingDirectory=%h/CogniSight
+ExecStart=%h/CogniSight/.venv/bin/cognisight run --config %h/CogniSight/config.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+Environment=PYTHONUNBUFFERED=1
+Environment=OMP_NUM_THREADS=2
+Environment=OPENBLAS_NUM_THREADS=1
+MemoryMax=4G
+
+[Install]
+WantedBy=default.target

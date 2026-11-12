@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Private recognition state and downloaded models
+.superpowers/
+models/
+qualification-private/
+*.sqlite3*
+*.db*
+*.onnx
+*.wav

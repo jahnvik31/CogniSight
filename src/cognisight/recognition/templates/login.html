@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block body %}<h1>Caregiver sign in</h1><p>Use the password configured on this Pi.</p><form method="post">{{ form.hidden_tag() }}{{ form.password.label }}{{ form.password(autocomplete='current-password') }}{% for error in form.password.errors %}<p class="notice">{{ error }}</p>{% endfor %}<button type="submit">Sign in</button></form>{% endblock %}
