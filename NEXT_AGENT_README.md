@@ -1,15 +1,15 @@
 # Start here: handoff for the next coding agent
 
-**Handoff date: 12 November 2026.** Read `AGENTS.md`, this file, and the relevant issue plan before changing code. The latest user instructions take priority. A plan being present in Git does **not** mean it has been approved.
+**Handoff date: 12 November 2026.** Read `AGENTS.md`, this file, and the relevant issue plan before changing code. The latest user instructions take priority. The user approved implementation of #6/#7 and a push to main on 12 November 2026. New scope still needs its own agreement.
 
 ## What the user wants next
 
 1. **Skip indoor navigation, issue #5.** Do not add markers, indoor routing, or another camera consumer.
 2. Work on **#6: shared system interfaces** and **#7: Pi/camera setup and validation**.
-3. **Ask the user to approve both plans before building them.** That approval has not been given in this handoff session. Read-only checks can fill missing hardware facts first.
-4. After approval, build and test in small steps, committing each finished change locally.
+3. **#6/#7 software implementation is approved and present.** Do not ask for the same approval again. Physical-device checks remain pending; collect actual evidence before declaring acceptance.
+4. Continue device qualification in small, tested steps using the authorized Git identity.
 5. At the end, give the contributor a **simple, checked runbook**: say which commands run on the laptop and which run on the Pi, what result to expect, and what to do if a step fails.
-6. **Do not push automatically.** The user will handle pushing and has deferred a final push to main until all issues have been looked after.
+6. The user explicitly authorized pushing this completed #6/#7 release to `main`. Check the actual push result and remote state; do not infer publication from local commits. This does not authorize unrelated future releases or force-pushes.
 
 The contributor receiving this code has access to the physical devices. Use that access to collect evidence. Do not repeat this session's hardware assumptions as successful tests.
 
@@ -21,8 +21,8 @@ The contributor receiving this code has access to the physical devices. Use that
 | #3 — outdoor positioning | Fresh local GPSD client; validates fixes and keeps live/last-known states separate | Confirm the actual board supports GNSS, its interface, setup and a real fix |
 | #4 — caregiver interface | Read-only HTTPS dashboard for a caregiver phone on the same Wi-Fi; approved workspace-style UI | Actual Flask/proxy/TLS/phone checks and combined Pi load |
 | #5 — indoor | **Deferred by the user** | Keep `unavailable / not_integrated` |
-| #6 — system interfaces | **Draft plan; approval pending** | Implementation, editable diagram and verification |
-| #7 — Pi and camera | **Draft plan; approval pending** | Diagnostic additions and real device checks |
+| #6 — system interfaces | Software implemented: stable isolated events, capture-age freshness, cached HTTP projection, cleanup fixes, contracts and rendered editable diagram | Device shutdown/load evidence and separate team-owner review |
+| #7 — Pi and camera | Software implemented: isolated native doctor, truthful measured smoke, final SSH runbook | Real Pi OS/native/camera/preview and adapter qualification |
 | #8 — end-to-end integration | Not accepted/qualified | Plan and perform combined-device acceptance later |
 
 Everything is a fresh implementation. **Do not restore or reuse reverted code from Git history.** Earlier GitHub issue comments mention old prototypes and passing tests; those are not evidence for this checkout. Do not close issues because files exist or unit tests pass.
@@ -31,13 +31,15 @@ Everything is a fresh implementation. **Do not restore or reuse reverted code fr
 
 - [Issue #6 plan](docs/system/ISSUE-6-PLAN.md)
 - [Issue #7 plan](docs/hardware/ISSUE-7-PLAN.md)
-- [Beginner SSH runbook — DRAFT](docs/hardware/PI-RUNBOOK-DRAFT.md)
+- [Beginner SSH runbook](docs/hardware/PI-RUNBOOK.md)
+- [Architecture and editable diagram](docs/architecture.md)
+- [Implemented contracts](docs/system/CONTRACTS.md)
 - [Software validation and known gaps](docs/VALIDATION.md)
 - [Recognition setup](docs/recognition/README.md) and [hardware acceptance gates](docs/recognition/QUALIFICATION.md)
 - [GNSS setup and limitations](docs/navigation/README.md)
 - [Caregiver HTTPS setup](docs/caregiver/README.md)
 
-The hardware runbook is the one instruction draft. The system runbook outline is only an editorial checklist. Do not give either draft to a beginner as a verified final installation procedure. Update commands after approved changes and real device checks.
+The final hardware runbook is the one beginner procedure. Commands were reviewed against the finished CLI, but have not been run on this Pi. The system runbook outline is only an editorial checklist. Record device results without presenting reviewed commands as tested hardware.
 
 ## Device facts: confirmed, observed, and unknown
 
@@ -106,17 +108,17 @@ Current dependency guidance starts with Bookworm/system Python 3.11. Do not assu
 
 The dashboard polls every 500 ms while connected and retries after 5 s on failure. Measure actual Pi load; this is not a performance guarantee. Its one-second recognition expiry and GPS configurable expiry must remain truthful.
 
-For #6, follow the user's diagram workflow: editable draw.io file, generated from a script, source coverage checklist, XML/edge validation, rendered visual inspection, and explicit assumptions. This is a **local Pi system**; do not invent AWS services or cloud boundaries. See the #6 draft for the required artifact paths and workflow. Do not generate the final diagram before approval.
+For #6, follow the user's diagram workflow: editable draw.io file, generated from a script, source coverage checklist, XML/edge validation, rendered visual inspection, and explicit assumptions. This is a **local Pi system**; do not invent AWS services or cloud boundaries. See docs/architecture.md for the generated editable file and inspected PNG. Keep both synchronized after changes.
 
 ## Tests and the limits of the last results
 
 At the end of the implementation phase in this session:
 
-- Python: **142 tests run; 126 passed; 16 explicitly skipped**.
+- Python: **173 tests run; 156 passed; 17 explicitly skipped**.
 - JavaScript: **4 passed**.
 - Python syntax compilation passed.
 - Actual shipped UI rendered at 320, 390 and 1440 px with simulated responses and no observed horizontal overflow.
-- CI/wheel build, Pi camera/audio/GNSS, phone HTTPS and real recognition accuracy were **not verified**.
+- CI/wheel build, Pi camera/audio/GNSS, phone HTTPS and real recognition accuracy were **not verified**. Isolated wheel building could not download setuptools>=61 through DNS restrictions; host setuptools 58.0.4 cannot build the pyproject correctly without isolation. Do not use the invalid local UNKNOWN wheel experiment as a release artifact.
 
 This Mac could not install dependencies or reach GitHub through its command environment. The skipped checks include Flask/Flask-WTF/Waitress, native image quality and sandbox-denied TCP binding. The next contributor's environment may allow them: **rerun rather than inherit these results**.
 
@@ -127,7 +129,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --test tests/dashboard.test.cjs
 ```
 
-The workflow in `.github/workflows/software-checks.yml` installs software-test dependencies and rejects skips. Check its actual result after the user pushes. A passing CI run does not qualify hardware.
+The workflow in `.github/workflows/software-checks.yml` installs software-test dependencies and rejects skips. Check its actual result after a successful push. A passing CI run does not qualify hardware.
 
 ### Commands that exist now
 
@@ -137,24 +139,24 @@ The workflow in `.github/workflows/software-checks.yml` installs software-test d
 - `cognisight run --config PATH` — starts configured services.
 - `scripts/fetch_models.py`, `scripts/evaluate_recognition.py`, `scripts/qualify.py` — read their `--help` and existing setup docs.
 
-**`doctor --native` is only proposed in #7; it does not exist yet.**
-`qualify.py --seconds` is currently a sampling window, not a hard deadline for a hung native call. The #7 plan corrects misleading capture/detector/recognizer evidence. An empty camera scene must not be described as successful SFace feature execution or identity recognition.
+`cognisight doctor --native` now runs required imports in isolated subprocesses with a ten-second timeout per group. Exit 0 means imports passed, 1 means a dependency failed/missing/timed out, and 2 means invocation/reporting error. It opens no devices and never certifies hardware.
+`qualify.py --seconds` is currently a sampling window, not a hard deadline for a hung native call. The smoke report now separates capture/detector execution from accepted SFace feature execution; zero frames fail. An empty camera scene must not be described as successful SFace feature execution or identity recognition.
 
 ## Git and collaboration
 
-- Software work was developed on **`feat/2-contextual-recognition`**. The latest implemented UI baseline is **`d63c428`**; newer planning/handoff commits may follow it.
+- Software work was developed on **`feat/2-contextual-recognition`**. Identify the final release through `git log` and the actual remote state; do not treat an older UI/planning commit as the completed release.
 - Start with `git status --short` and `git log -5 --oneline`. Preserve the contributor's uncommitted changes.
-- Use the branch/commit the user provides after pushing. Do not assume remote main already has this work. If it has not been pushed, the draft runbook explains a current-tree archive/SCP transfer.
+- Use the branch/commit the user provides after pushing. Do not assume remote main already has this work. If it has not been pushed, the runbook explains a current-tree archive/SCP transfer.
 - User requested repository-local commit identity **`jahnvik31 <jahnvikotangale@gmail.com>`**. Do not use Codex as author/co-author or change global identity. Follow any explicit newer identity instruction from the user/contributor.
-- Commit small, verified changes. Do not merge/push/force-push, close GitHub issues, or claim team approval automatically.
+- Commit small, verified changes. The user authorized this release to main; do not force-push, close GitHub issues, or claim team approval automatically. Follow the usual PR workflow for later work unless the user explicitly changes it.
 - Do not restore reverted prototypes or add raw device captures as tests. Use labelled synthetic fixtures and separate physical evidence.
 
 ## Before the next agent says “done”
 
-1. Confirm plan approval before implementation.
+1. Honor the existing #6/#7 approval; obtain agreement for new scope or interface changes.
 2. Run the relevant tests and report failures/skips by their real causes.
 3. Record actual device/OS/package/model versions when hardware is used.
 4. Keep #5 deferred and hardware-unavailable states honest.
 5. Produce one simple final Pi runbook, checked against the finished CLI and actual device results; label untested steps.
 6. Keep private material out of staged files. `.gitignore` does not remove anything already tracked.
-7. Report local commit IDs and pending work; leave remote publishing to the user.
+7. Report commit IDs, exact remote-push result, and pending device acceptance.

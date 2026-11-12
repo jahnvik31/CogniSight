@@ -231,3 +231,7 @@ notes. Runtime.subscribe returns a bounded module-local queue; callers must hand
 old events being dropped and unsubscribe when done. Health is available via
 Runtime.status. This is not a new shared HTTP API or message broker. Agree external
 interfaces with Jahnvi through #6 before cross-module integration.
+
+## Pi contributor setup and native diagnostics
+
+Use the [simple Pi SSH runbook](../hardware/PI-RUNBOOK.md) for the actual device setup and [hardware status](../hardware/README.md) for pending checks. `cognisight doctor --native` explicitly imports native dependencies in isolated child processes with a ten-second timeout per group; it opens no devices and reports sanitized states. Plain `doctor` remains a cheap package-discovery check. Neither certifies hardware compatibility. A configured qualification smoke now keeps recognition inference pending for an empty scene, even if camera capture and detection execute successfully.

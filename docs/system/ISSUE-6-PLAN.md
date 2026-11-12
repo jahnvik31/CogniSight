@@ -1,6 +1,6 @@
 # Unified system architecture and module interfaces — issue #6 draft
 
-**Status: full proposal for user/team review. No product code, diagram generation, dependency installation, commits or push are authorized by this draft.**
+**Status: user approved #6/#7 implementation and push to main on 12 November 2026. Software changes, contracts and rendered editable diagram are implemented; see ../architecture.md and ../VALIDATION.md. Physical acceptance and separate module-owner sign-off remain pending. The detailed proposal below records the original plan; its earlier no-push restrictions are superseded by that explicit user instruction.**
 
 Source: [GitHub issue #6](https://github.com/jahnvik31/CogniSight/issues/6), inspected 12 November 2026; repository `AGENTS.md`, `README.md`, actual recognition/navigation/caregiver source, deployment templates and validation/setup documents. This plan describes fresh work against the current checkout. **The user has deferred the entire indoor module (#5).** No indoor implementation is part of this phase.
 

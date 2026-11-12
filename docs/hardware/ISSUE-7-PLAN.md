@@ -1,6 +1,6 @@
 # Raspberry Pi 5 and camera qualification implementation plan
 
-> **For agentic workers:** After user approval, use `superpowers:executing-plans` or the user's chosen execution method task by task. This document authorizes no implementation, package installation, SSH session, OS replacement, commit, or push.
+> **For agentic workers:** After user approval, use `superpowers:executing-plans` or the user's chosen execution method task by task. The user approved this software implementation and pushing the release to main on 12 November 2026. Physical-device actions remain subject to actual access and the checkpoints below; no OS replacement is planned.
 
 **Goal:** Make the actual Pi 5 development setup reproducible, diagnose native dependency failures honestly, and collect real camera/recognition evidence for [issue #7](https://github.com/jahnvik31/CogniSight/issues/7).
 
@@ -12,7 +12,9 @@
 
 ## Approval and facts still needed
 
-Status: **PLAN ONLY — awaiting user answers and approval. No target hardware accessed.**
+Status: **Implementation approved by the user. Software tools and the final runbook are implemented; target-hardware acceptance remains pending. No target hardware accessed.**
+
+Implementation: opt-in native diagnostics, measured smoke metadata and separate recognizer-feature evidence are present. Use [PI-RUNBOOK.md](PI-RUNBOOK.md) and [the hardware status](README.md). The checklist below records the original approved scope, not proof of physical execution.
 
 1. User confirms the Pi is already set up with Raspberry Pi OS **64-bit**. Preserve this installation. First authorized SSH session must identify exact release/image and Python version before any installation; Bookworm versus Trixie remains unknown. No reflash is planned.
 2. User confirms SSH username **`jahnvi`**, hostname **`cognisight`**; use `ssh jahnvi@cognisight.local` when mDNS works, otherwise the user's approved `REPLACE_PI_IP` placeholder. Record laptop OS and actual IP when available. No password, private key, Wi-Fi password or authentication secret should be sent in chat or written into instructions.
@@ -112,7 +114,7 @@ No production file changes occur in this planning stage. Coordinate CLI-file edi
 
 | Checkpoint | Evidence required | Current state |
 |---|---|---|
-| Software/tooling | New diagnostics/tooling tests plus full existing tests; report any skips; no private output | Proposed, not implemented |
+| Software/tooling | New diagnostics/tooling tests plus full existing tests; report any skips; no private output | Implemented; see tests and development verification |
 | Boot/network | Actual Pi identity/OS, successful normal reboot and repeat SSH connection | Pending hardware |
 | Camera detection | Actual detected sensor and mode list, no competing owner | Pending hardware |
 | Preview | Human sees live preview on actual Pi display | Pending hardware |
@@ -135,4 +137,4 @@ Issue #7 cannot be honestly closed from a Mac test pass or documentation alone. 
 - [Pi 5](https://www.raspberrypi.com/products/raspberry-pi-5/) and [Active Cooler](https://www.raspberrypi.com/products/active-cooler/): power/cooling inventory basis; actual sustained behavior remains to be measured.
 - Existing `docs/navigation/README.md` and `docs/caregiver/README.md` are authoritative local procedures for unknown receiver setup and phone TLS. Keep their hardware gates rather than guessing.
 
-Assumptions to confirm: user wants local same-Wi-Fi SSH operation, a private single-Pi installation, no OS erase, and documentation/tooling ready even if physical qualification must wait. Proposed helper additions and commit sequence require approval with #6's plan before building.
+Assumptions to confirm: user wants local same-Wi-Fi SSH operation, a private single-Pi installation, no OS erase, and documentation/tooling ready even if physical qualification must wait. The user approved the helper additions with #6; software is implemented, while actual device acceptance remains pending.

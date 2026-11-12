@@ -7,12 +7,13 @@
   No walking directions, maps, cellular support or guessed GNSS vendor commands.
 - #4: user-confirmed **caregiver phone on the same Wi-Fi**, read-only authenticated
   HTTPS monitoring; one wearer and credential per Pi. Enrollment stays loopback-only.
+- #6: stable validated event IDs, isolated subscribers, capture-age freshness, cached
+  HTTP profile projection, shutdown failure propagation, contracts and editable diagram.
+- #7 software: isolated `doctor --native`, truthful camera/SFace smoke reporting,
+  hardware checklist and simple SSH runbook. Device acceptance remains pending.
 - Indoor navigation has no producer and remains explicitly not integrated.
 
-The user authorized incremental local commits by
-`jahnvik31 <jahnvikotangale@gmail.com>` and deferred any push to `main` until all issues have been looked after.
-No remote push is part of this phase.
-The usual PR/main workflow is not changed by the local commits.
+The user approved #6/#7 implementation and explicitly authorized pushing the finished release to `main` on 12 November 2026, using `jahnvik31 <jahnvikotangale@gmail.com>`. This supersedes the earlier local-only instruction for this release. Do not infer a successful push or CI run from that authorization.
 
 ## Local verification
 
@@ -28,6 +29,10 @@ environment's network restrictions. The Python suite reports exact skipped check
 those are not successes. It also skips its real TCP loopback test when the sandbox
 denies socket binding. Boundary tests still exercise the GPSD parser/worker with
 controlled synthetic socket responses.
+
+Latest local run: **173 Python checks: 156 passed, 17 skipped; four Node checks passed.**
+The extra skipped check validates server options against the actual installed
+Waitress parser, which is unavailable here. Compilation of source/scripts/tests passed.
 
 Node tests execute the **shipped dashboard JavaScript** against a small DOM boundary:
 source-age expiry without new polls, expired-session removal of sensitive content,
@@ -46,7 +51,11 @@ login, certificates, real positions or target hardware.
 software-test dependencies, rejects any skipped software tests, executes the
 JavaScript tests, builds a wheel and checks that shipped templates/styles/scripts
 are present. It uses read-only repository permissions and does not commit/publish.
-**The workflow has not run in this session.** Its result must be checked after
+**The workflow has not run in this session.** A local isolated wheel-build attempt
+failed while downloading `setuptools>=61` because DNS/network access is unavailable.
+The host has setuptools 58.0.4; a no-isolation experiment produced an invalid empty
+`UNKNOWN` wheel and failed content verification. That artifact is outside the repo
+and is not a release package. No successful wheel build is claimed. Its result must be checked after
 network access permits pushing. Hardware acceptance is never inferred from CI.
 
 Reference action usage:
@@ -85,3 +94,15 @@ Independent review and regression checks addressed:
 
 Use module plans/setup guides and docs/recognition/QUALIFICATION.md to record
 actual evidence. No GitHub issues are closed or hardware acceptance claimed here.
+
+## Issue #6/#7 handoff
+
+Read [architecture](architecture.md), [contracts](system/CONTRACTS.md),
+[hardware checklist](hardware/README.md) and the [simple SSH runbook](hardware/PI-RUNBOOK.md).
+The official diagrams.net viewer rendered the generated editable diagram; the PNG
+was visually inspected. Hardware daggers identify unverified camera/adapter/GNSS paths.
+The native import doctor contains per-probe timeouts; camera/audio smoke remains
+in-process and its sample period is not a native-hang deadline. Save inventory first.
+Review also found and fixed stale audio worker ownership, partial-start cleanup and
+shutdown error propagation; failed device cleanup prevents SQLite close. HTTP bounds
+are explicit and the service stop budget is 90 seconds, still unmeasured on the Pi.
