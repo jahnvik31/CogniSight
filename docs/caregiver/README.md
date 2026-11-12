@@ -82,7 +82,7 @@ must not add a second proxy without reviewing that trust configuration.
 
 ## What the statuses mean
 
-The page polls every five seconds. Source age advances independently between
+The page polls every half second while connected (five-second retries after failure). Source age advances independently between
 polls. Producer-supplied expiry is enforced: recognition observations default to
 one second; GPS fixes default to ten seconds (configurable by the GPS module). A successful page
 refresh is not proof that a camera/GPS source progressed. Read-only runtime

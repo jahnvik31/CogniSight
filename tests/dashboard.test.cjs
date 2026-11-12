@@ -40,8 +40,9 @@ async function boot(replies) {
   await flush();
   return {elements,document,listeners,
     tick(seconds) { now+=seconds*1000; intervals.forEach(fn=>fn()); },
-    async poll() { const item=[...timers].find(([,v])=>v.delay===5000); assert.ok(item); timers.delete(item[0]); await item[1].callback(); await flush(); },
-    pendingPolls:()=>[...timers.values()].filter(v=>v.delay===5000).length};
+    async poll() { const item=[...timers].find(([,v])=>[500,5000].includes(v.delay)); assert.ok(item); timers.delete(item[0]); await item[1].callback(); await flush(); },
+    nextPollDelay:()=>[...timers.values()].find(v=>[500,5000].includes(v.delay))?.delay,
+    pendingPolls:()=>[...timers.values()].filter(v=>[500,5000].includes(v.delay)).length};
 }
 
 test('source freshness expires independently of successful browser polling',async()=>{
@@ -52,9 +53,9 @@ test('source freshness expires independently of successful browser polling',asyn
   assert.equal(note.textContent,'<script>untrusted text</script>');
   app.tick(2);
   assert.equal(app.elements.get('people').children.length,0);
-  assert.match(app.elements.get('recognition-status').textContent,/stale/);
+  assert.match(app.elements.get('recognition-status').textContent,/stale/i);
   app.tick(9);
-  assert.match(app.elements.get('outdoor-status').textContent,/stale/);
+  assert.match(app.elements.get('outdoor-status').textContent,/stale/i);
   assert.doesNotMatch(app.elements.get('coordinates').textContent,/Latitude/);
 });
 
@@ -76,4 +77,15 @@ test('network failure clears location and visible mock labels, then retries',asy
   assert.equal(app.elements.get('people').children.length,0);
   assert.match(app.elements.get('connection').textContent,/Disconnected/);
   assert.equal(app.pendingPolls(),1);
+});
+
+
+test('healthy refreshes are faster than recognition expiry',async()=>{
+  const app=await boot([{data:sample()},{data:sample()}]);
+  assert.ok(app.nextPollDelay()<1000, 'Next refresh must occur before the one-second observation expiry');
+  app.tick(.6);
+  await app.poll();
+  app.tick(.6);
+  assert.equal(app.elements.get('people').children.length,1);
+  assert.doesNotMatch(app.elements.get('recognition-status').textContent,/stale/i);
 });

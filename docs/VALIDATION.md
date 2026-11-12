@@ -10,8 +10,9 @@
 - Indoor navigation has no producer and remains explicitly not integrated.
 
 The user authorized incremental local commits by
-`jahnvik31 <jahnvikotangale@gmail.com>` and a final push to `main` after this work.
-The usual PR/main workflow in AGENTS.md is superseded for that explicit push only.
+`jahnvik31 <jahnvikotangale@gmail.com>` and deferred any push to `main` until all issues have been looked after.
+No remote push is part of this phase.
+The usual PR/main workflow is not changed by the local commits.
 
 ## Local verification
 
@@ -30,10 +31,13 @@ controlled synthetic socket responses.
 
 Node tests execute the **shipped dashboard JavaScript** against a small DOM boundary:
 source-age expiry without new polls, expired-session removal of sensitive content,
-and network-failure clearing/retry. They are not a substitute for a phone browser.
+network-failure clearing/retry, and refresh timing before recognition expiry. They are not a substitute for a phone browser.
 The actual Jinja templates, styles and script were additionally rendered in
-Playwright at a 390-pixel viewport using intercepted, clearly labelled simulated
-responses. No horizontal overflow was observed. That preview does not test Flask
+Playwright at 320-, 390-, and 1440-pixel viewports using intercepted, clearly labelled simulated
+responses. No horizontal overflow was observed. The UI uses a compact workspace
+layout inspired by monday.com app navigation, source/status pills and readable
+phone typography. Active polling is 500 ms with five-second failure retries; the
+combined Pi load of multiple caregiver tabs still needs measurement. That preview does not test Flask
 login, certificates, real positions or target hardware.
 
 ## CI gate

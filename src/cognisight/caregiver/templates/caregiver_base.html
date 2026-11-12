@@ -1,1 +1,43 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CogniSight caregiver</title><link rel="stylesheet" href="{{ url_for('caregiver.static',filename='dashboard.css') }}"></head><body><header><h1>CogniSight caregiver</h1><p>Observations and device status</p>{% if session.get('authenticated') and logout_form is defined %}<form method="post" action="/logout">{{ logout_form.hidden_tag() }}<button>Sign out</button></form>{% endif %}</header><main>{% for message in get_flashed_messages() %}<p role="alert">{{ message }}</p>{% endfor %}{% block body %}{% endblock %}</main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}CogniSight · Caregiver workspace{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('caregiver.static',filename='dashboard.css') }}">
+</head>
+<body class="{% if session.get('authenticated') %}workspace{% else %}access-page{% endif %}">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="app-bar">
+    <a class="brand" href="{% if session.get('authenticated') %}/dashboard{% else %}/login{% endif %}" aria-label="CogniSight home">
+      <span class="brand-mark" aria-hidden="true">C</span><span>CogniSight</span>
+    </a>
+    <span class="app-bar-label">Caregiver workspace</span>
+    {% if session.get('authenticated') and logout_form is defined %}
+    <form method="post" action="/logout" class="signout-form">
+      {{ logout_form.hidden_tag() }}<button class="button button-quiet" type="submit">Sign out</button>
+    </form>
+    {% else %}<span class="access-label">Private access</span>{% endif %}
+  </header>
+  <div class="app-shell">
+    {% if session.get('authenticated') %}
+    <aside class="sidebar" aria-label="Workspace navigation">
+      <div class="workspace-name"><span class="workspace-monogram" aria-hidden="true">CW</span><div><strong>Care workspace</strong><span>Read-only monitoring</span></div></div>
+      <p class="nav-label">WORKSPACE</p>
+      <nav class="sidebar-nav">
+        <a class="nav-active" href="/dashboard" aria-current="page"><span class="nav-indicator" aria-hidden="true"></span>Overview</a>
+        <a href="#recognition">Recognized people</a>
+        <a href="#outdoor">Outdoor location</a>
+        <a href="#indoor">Indoor navigation</a>
+        <a href="#device-health">Device health</a>
+      </nav>
+      <div class="sidebar-footnote"><span class="scope-label">Caregiver view</span><p>Enrollment and device setup stay on the Pi.</p></div>
+    </aside>
+    {% endif %}
+    <main id="main" class="{% if session.get('authenticated') %}workspace-main{% else %}access-main{% endif %}">
+      {% for message in get_flashed_messages() %}<p class="notice" role="alert">{{ message }}</p>{% endfor %}
+      {% block body %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

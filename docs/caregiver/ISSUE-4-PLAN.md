@@ -43,7 +43,7 @@ The projection does not persist a new history store. It reads the current provid
 
 ## 3. Freshness, failures and phone behavior
 
-The page fetches `/dashboard/state` every five seconds, at most one request at a time, with a four-second request timeout. It checks HTTP success, JSON type and schema; an HTTP error does not automatically reject a Fetch promise. Browser update handling uses safe DOM text operations rather than injecting profile HTML. [MDN Fetch behavior](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)
+The page fetches `/dashboard/state` every half second while connected (five-second retries after failure), at most one request at a time, with a four-second request timeout. It checks HTTP success, JSON type and schema; an HTTP error does not automatically reject a Fetch promise. Browser update handling uses safe DOM text operations rather than injecting profile HTML. [MDN Fetch behavior](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)
 
 The backend supplies age from actual producer progress, not from the HTTP refresh. Recognition frame presence expires at one second by default; GPS expires at its configured maximum age, ten seconds by default. The projection accepts a finite positive producer `max_age_seconds` capped at 300 seconds and rejects currentness at the expiry boundary. The browser advances age using `performance.now()` between polls so a stopped poll cannot freeze “live.” It never compares the phone's wall clock with a Pi timestamp to determine freshness.
 
@@ -55,7 +55,7 @@ Explicit mock input produces both a persistent DEMO banner and source labels. Cl
 
 ## 4. Same-Wi-Fi access and privacy
 
-Use a separate cookie name and an HMAC-derived signing key based on the existing local session secret. The caregiver password hash is shared with Pi-local setup; signed sessions are not shared across applications. Configure Secure, HttpOnly, SameSite=Strict cookies, CSRF-protected login/logout, password throttling (five failed attempts per minute), bounded requests, no-store responses, escaped templates and restrictive security headers. Use `Referrer-Policy: same-origin` so HTTPS login/logout retain the same-origin Referer required by Flask-WTF strict SSL CSRF validation; missing or cross-origin Referer is rejected even with a valid token. Do not disable that strict check. Keep personal fields out of session cookies and logs. Disable per-request session refresh so five-second polling does not keep a fifteen-minute signed session alive indefinitely. [Flask security/configuration](https://flask.palletsprojects.com/en/stable/web-security/), [session configuration](https://flask.palletsprojects.com/en/stable/config/)
+Use a separate cookie name and an HMAC-derived signing key based on the existing local session secret. The caregiver password hash is shared with Pi-local setup; signed sessions are not shared across applications. Configure Secure, HttpOnly, SameSite=Strict cookies, CSRF-protected login/logout, password throttling (five failed attempts per minute), bounded requests, no-store responses, escaped templates and restrictive security headers. Use `Referrer-Policy: same-origin` so HTTPS login/logout retain the same-origin Referer required by Flask-WTF strict SSL CSRF validation; missing or cross-origin Referer is rejected even with a valid token. Do not disable that strict check. Keep personal fields out of session cookies and logs. Disable per-request session refresh so half-second polling with five-second failure retries does not keep a fifteen-minute signed session alive indefinitely. [Flask security/configuration](https://flask.palletsprojects.com/en/stable/web-security/), [session configuration](https://flask.palletsprojects.com/en/stable/config/)
 
 The application requires an explicit hostname/IP allowlist, HTTPS, same-origin requests and a loopback proxy peer. Wildcards and unspecified allowlists are rejected. Waitress trusts only the local proxy's protocol header; do not trust client-supplied host/prefix or arbitrary proxy chains. Backend ports remain loopback-only. The app's proxy middleware is configured for that one verified protocol hop, not for changing client identity. [Werkzeug proxy trust](https://werkzeug.palletsprojects.com/en/stable/middleware/proxy_fix/)
 
@@ -79,7 +79,7 @@ Implementation and tests exist for these software surfaces. Flask integration ch
 
 | Area | Required evidence |
 |---|---|
-| Authentication | Unauthenticated state returns 401; login/logout reject missing CSRF; secure distinct cookie; five-second polls do not renew fifteen-minute expiry; expired session clears phone content |
+| Authentication | Unauthenticated state returns 401; login/logout reject missing CSRF; secure distinct cookie; automatic polls do not renew fifteen-minute expiry; expired session clears phone content |
 | Proxy/TLS | Real Waitress header middleware plus local Caddy path; nonlocal backend peer, wrong Host, cross-origin Origin and plain HTTP rejected; phone trusts correct certificate without warning |
 | Data validity | Unknown schema/unintegrated producers unavailable; invalid/ranged/nonfinite GPS rejected; `(0,0)` valid when source fix is valid; observed timestamp cannot drive freshness |
 | Recency | Recognition frame age and configured GPS expiry respected; phone wall-clock changes do not affect monotonic expiry; no-fix after valid fix yields historical last-known only |
@@ -88,7 +88,7 @@ Implementation and tests exist for these software surfaces. Flask integration ch
 | Mock separation | Simulated source produces DEMO label; no silent fallback or mixed-source claim; disconnect clears mock indicator with content |
 | Browser/accessibility | Real phone viewport, keyboard focus, 200% zoom, narrow reflow, text status labels, contrast and screen-reader status checks; no auto-playing speech |
 | Resource/load | Two-hour combined run, five open dashboard tabs, no crashes/unbounded DOM/queue growth; total relevant-process memory remains under existing 4 GB budget; recognition/audio latency gates still pass |
-| Presentation latency | Proposed dashboard p95 accepted-update-to-render <=6 seconds under five-second polling; measure source receipt, HTTP and render delay separately, not only server response time |
+| Presentation latency | Proposed dashboard p95 accepted-update-to-render <=2 seconds during connected half-second polling; measure source receipt, HTTP and render delay separately, not only server response time |
 | Offline | No third-party requests after installation; same-Wi-Fi browser works with internet disconnected; no default map/CDN dependence |
 | Documentation | Clean setup reproduces qualified versions, explicit configuration/host/certificate procedure, limitations and incomplete indoor integration documented |
 

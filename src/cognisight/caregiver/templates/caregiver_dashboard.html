@@ -1,1 +1,36 @@
-{% extends 'caregiver_base.html' %}{% block body %}<p id="connection" role="status">Connecting to device…</p><p id="demo" class="warning" hidden>DEMO — simulated data is present. This is not live wearer data.</p><div class="cards"><section aria-labelledby="recognition-heading"><h2 id="recognition-heading">Recognized people</h2><p id="recognition-status">Unavailable</p><p id="recognition-age"></p><div id="people"></div><p>Names and context are caregiver-entered information. Recognition is an observation, not proof of identity or safety.</p></section><section aria-labelledby="outdoor-heading"><h2 id="outdoor-heading">Outdoor location</h2><p id="outdoor-status">Unavailable</p><p id="outdoor-age"></p><p id="coordinates">No current usable GPS fix.</p><p id="last-known"></p></section><section aria-labelledby="indoor-heading"><h2 id="indoor-heading">Indoor navigation</h2><p id="indoor-status">Unavailable — not integrated.</p><p>Indoor checkpoints and outdoor GPS are separate sources.</p></section><section aria-labelledby="health-heading"><h2 id="health-heading">Device health</h2><dl id="health"></dl></section></div><noscript><p>JavaScript is required for current status updates. No live data is shown without it.</p></noscript><script src="{{ url_for('caregiver.static',filename='dashboard.js') }}" defer></script>{% endblock %}
+{% extends 'caregiver_base.html' %}
+{% block body %}
+<div id="overview" class="page-heading">
+  <p class="breadcrumb">Care workspace <span aria-hidden="true">/</span> Overview</p>
+  <div class="page-title-row"><div><h1>Care overview</h1><p class="page-description">Recent observations from your CogniSight device.</p></div><span class="scope-label">Read only</span></div>
+</div>
+<nav class="section-tabs" aria-label="Dashboard sections">
+  <a class="tab-active" href="#overview">Overview</a><a href="#recognition">People</a><a href="#outdoor">Location</a><a href="#device-health">Device</a>
+</nav>
+<div class="connection-strip"><p id="connection" role="status">Connecting to device…</p><span class="refresh-cadence">Updates automatically</span></div>
+<p id="demo" class="demo-notice" hidden><strong>DEMO WORKSPACE</strong> Simulated observations. Not live wearer data.</p>
+<div class="dashboard-grid">
+  <section id="recognition" class="panel recognition-panel" aria-labelledby="recognition-heading">
+    <header class="panel-header"><div><h2 id="recognition-heading">Recognized people</h2><p>Verified profiles from people in view</p></div><span id="recognition-status" class="status-pill status-neutral">Unavailable</span></header>
+    <div class="panel-body recognition-body"><p class="content-label">PERSON &amp; CONTEXT</p><div id="people" class="people-list"></div><p id="recognition-empty" class="empty-message">Recognition is not available.</p></div>
+    <footer class="panel-footer"><span id="recognition-source" class="source-label">No current data</span><p id="recognition-age" class="observation-age">Waiting for an observation.</p></footer>
+  </section>
+  <section id="outdoor" class="panel location-panel" aria-labelledby="outdoor-heading">
+    <header class="panel-header"><div><h2 id="outdoor-heading">Outdoor location</h2><p>Latest GPS observation</p></div><span id="outdoor-status" class="status-pill status-neutral">Unavailable</span></header>
+    <div class="panel-body location-body"><p class="content-label">COORDINATES</p><p id="coordinates" class="coordinates">No current usable GPS fix.</p><p id="last-known" class="last-known"></p></div>
+    <footer class="panel-footer"><span id="outdoor-source" class="source-label">No current data</span><p id="outdoor-age" class="observation-age">Waiting for an observation.</p></footer>
+  </section>
+  <section id="device-health" class="panel health-panel" aria-labelledby="health-heading">
+    <header class="panel-header"><div><h2 id="health-heading">Device health</h2><p>Status reported by each module</p></div></header>
+    <div class="health-columns" aria-hidden="true"><span>Module</span><span>Status</span></div><dl id="health" class="health-list"></dl>
+  </section>
+  <section id="indoor" class="panel indoor-panel" aria-labelledby="indoor-heading">
+    <header class="panel-header"><div><h2 id="indoor-heading">Indoor navigation</h2><p>Indoor positioning source</p></div><span id="indoor-status" class="status-pill status-neutral">Not integrated</span></header>
+    <div class="panel-body"><div class="integration-placeholder"><span class="integration-rule" aria-hidden="true"></span><p>No indoor observations yet.</p><span>This module has not been connected.</span></div></div>
+    <footer class="panel-footer"><p class="observation-age">Indoor positioning is separate from GPS.</p></footer>
+  </section>
+</div>
+<p class="workspace-note">Observations support caregiver awareness. They do not confirm identity, location accuracy, or personal safety.</p>
+<noscript><p class="notice">Enable JavaScript for current observations. No live data is shown without it.</p></noscript>
+<script src="{{ url_for('caregiver.static',filename='dashboard.js') }}" defer></script>
+{% endblock %}

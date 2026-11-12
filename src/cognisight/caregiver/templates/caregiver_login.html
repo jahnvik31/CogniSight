@@ -1,1 +1,15 @@
-{% extends 'caregiver_base.html' %}{% block body %}<section><h2>Caregiver sign in</h2><p>This interface is read-only. Enrollment and device setup remain on the Pi.</p><form method="post">{{ form.hidden_tag() }}{{ form.password.label }}{{ form.password(autocomplete='current-password') }}<button>Sign in</button>{% for error in form.password.errors %}<p role="alert">{{ error }}</p>{% endfor %}</form></section>{% endblock %}
+{% extends 'caregiver_base.html' %}
+{% block title %}Sign in · CogniSight{% endblock %}
+{% block body %}
+<div class="access-intro"><p class="eyebrow">CAREGIVER WORKSPACE</p><h1>Welcome back.</h1><p>Sign in to view observations from your CogniSight device.</p></div>
+<section class="access-panel" aria-labelledby="signin-heading">
+  <div class="access-panel-heading"><h2 id="signin-heading">Sign in</h2><span class="scope-label">Read only</span></div>
+  <form method="post" class="login-form">
+    {{ form.hidden_tag() }}{{ form.password.label }}{{ form.password(autocomplete='current-password',placeholder='Enter your caregiver password') }}
+    {% for error in form.password.errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
+    <button class="button button-primary" type="submit">Sign in to workspace <span aria-hidden="true">→</span></button>
+  </form>
+  <p class="login-help">Use the caregiver password configured on your Pi.</p>
+</section>
+<div class="access-footnote"><span>Same Wi-Fi network</span><span>Private caregiver access</span></div>
+{% endblock %}

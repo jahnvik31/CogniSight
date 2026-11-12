@@ -82,5 +82,13 @@ prepared locally; publishing/PR requires a valid GitHub login and network access
   keepalive/request-worker cleanup, inference-lock blocking, and HTTPS CSRF
   Referer compatibility. Native-dependency checks remain visibly skipped locally.
 - Real shipped UI rendered at phone width with clearly simulated intercepted data;
-  three shipped-JavaScript behavior tests pass. CI rejects dependency skips and
+  four shipped-JavaScript behavior tests pass. CI rejects dependency skips and
   checks wheel assets once it can run. See docs/VALIDATION.md for release boundaries.
+
+- User approved the redesigned phone UI. Actual shipped markup/styles/script
+  were inspected at 320/390/1440 widths with simulated inputs and no overflow.
+  Connected refresh now precedes one-second recognition expiry; failure retries
+  stay five seconds. No stale-data retention or new data claims were introduced.
+
+- Latest user instruction: keep commits local; defer any push to main until all
+  issues have been looked after. No remote push performed in this phase.
