@@ -10,5 +10,16 @@
   "command_prefix": "computer",
   "threshold": 0.6,
   "margin": 0.08,
-  "calibrated": false
+  "calibrated": false,
+  "navigation": {
+    "enabled": false,
+    "gpsd_host": "127.0.0.1",
+    "gpsd_port": 2947,
+    "fix_max_age": 10
+  },
+  "caregiver": {
+    "enabled": false,
+    "allowed_hosts": [],
+    "backend_port": 8766
+  }
 }

@@ -79,6 +79,49 @@ prompted interactively, never placed in a command line. State defaults to
 password and run if overriding it. Password rotation requires a service restart
 to invalidate old browser sessions. Bind is loopback only; no remote enrollment.
 
+## Optional GPS monitoring and caregiver access
+
+Existing recognition-only configurations continue to run with both optional
+services disabled. To enable GPSD monitoring, set `navigation.enabled` to `true`
+and configure the canonical keys `gpsd_host` (default `127.0.0.1`), `gpsd_port`
+(default `2947`), and `fix_max_age` (default ten seconds). The GPSD service and
+physical GNSS receiver must already be configured and tested on the Pi. Only
+loopback GPSD connections are accepted. Missing fixes or disconnected hardware
+remain unavailable; this switch does not implement turn-by-turn routing.
+
+To run the separate read-only caregiver dashboard, set `caregiver.enabled` to
+`true`, provide `caregiver.allowed_hosts` as the exact DNS names or IP addresses
+caregivers will use, and choose `caregiver.backend_port` (default `8766`). No
+wildcards, URL schemes, paths, or host:port strings are accepted. The backend port
+must differ from the local enrollment `--port`. The example leaves the dashboard
+disabled and its host list empty; replace those values for the actual Pi.
+
+The dashboard backend binds **only to `127.0.0.1`**, behind a same-Pi HTTPS reverse
+proxy such as the supplied [Caddy configuration](../../deploy/Caddyfile.example).
+Follow the [caregiver setup guide](../caregiver/README.md) for certificates and
+phone/browser access. Configure the proxy to preserve
+the allowlisted Host and forward the HTTPS scheme. Waitress trusts only
+`X-Forwarded-Proto` from the loopback proxy and strips forwarded host/client-IP
+headers; the dashboard independently checks the loopback peer and HTTPS scheme.
+Do not expose backend port 8766 directly on the LAN or disable these guards.
+Use the existing caregiver password; the dashboard has its own browser session.
+The enrollment interface remains loopback-only and is not routed through Caddy.
+
+Start all enabled components with the same command:
+
+```sh
+cognisight run --config config.json
+```
+
+The CLI binds both configured HTTP servers before starting device processing.
+A bind/startup failure cleans up previously acquired resources; an unexpected
+runtime or HTTP-loop failure stops the service group for supervisor restart.
+SIGTERM/Ctrl-C stops GPS monitoring, recognition/audio, and both HTTP servers.
+Keepalive channels are explicitly closed. Database closure waits for runtime,
+HTTP loops, and request workers to finish; a stuck request produces a failed
+shutdown rather than closing SQLite underneath it. Health and missing-data
+states are available in the respective setup/dashboard interfaces.
+
 ## Enrollment and wearer behavior
 
 Start enrollment; capture ten accepted, modestly varied face views. Only one
