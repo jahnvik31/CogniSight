@@ -9,7 +9,9 @@ WorkingDirectory=%h/CogniSight
 ExecStart=%h/CogniSight/.venv/bin/cognisight run --config %h/CogniSight/config.json
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=15
+# Allow sequential device, HTTP-dispatcher and worker joins. Native calls may
+# still hang; systemd terminates the service group when this deadline expires.
+TimeoutStopSec=90
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

@@ -175,7 +175,11 @@ class AudioEngine:
         for thread in self._threads:
             if thread is not threading.current_thread():
                 thread.join(timeout=3)
-        self._threads.clear()
+        self._threads = [thread for thread in self._threads if thread.is_alive()]
+        if self._threads:
+            # A native call may outlive the join budget. Preserve ownership so
+            # start() cannot create duplicate microphone/playback workers.
+            raise RuntimeError("Audio worker failed to stop; restart the service")
 
     def say(self, text: str, valid=lambda: True, priority: int = 0):
         if not self.available or not text or len(text) > 1500:

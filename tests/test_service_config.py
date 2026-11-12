@@ -193,6 +193,35 @@ class LifecycleTests(unittest.TestCase):
             self.assertIn(event, events)
         self.assertGreater(events.index("store.close"), events.index("runtime.close"))
 
+    def test_failed_runtime_device_cleanup_prevents_database_close(self):
+        events = []
+
+        class RuntimeWithStalledOwner(FakeRuntime):
+            cleanup_failed = True
+
+        runtime = RuntimeWithStalledOwner(events, fail=True)
+        with patch("cognisight.recognition.cli.logging.getLogger"):
+            with self.assertRaisesRegex(RuntimeError, "Service cleanup failed"):
+                run_services(runtime, [FakeServer(events, "enrollment")],
+                             threading.Event(), FakeStore(events),
+                             poll_interval=0.005, join_timeout=0.05)
+        self.assertNotIn("store.close", events)
+
+    def test_runtime_exception_during_requested_stop_is_not_silent_success(self):
+        events, stop = [], threading.Event()
+
+        class FailingDuringStop(FakeRuntime):
+            def run(self):
+                stop.set()
+                self.closed.wait(1)
+                raise RuntimeError("shutdown error")
+
+        with self.assertRaisesRegex(RuntimeError, "Service worker terminated"):
+            run_services(FailingDuringStop(events), [FakeServer(events, "enrollment")],
+                         stop, FakeStore(events), poll_interval=0.005, join_timeout=0.1)
+        # This fake has no stalled owner; successful resource cleanup closes DB.
+        self.assertIn("store.close", events)
+
     def test_worker_failure_stops_other_services_and_closes_store(self):
         for kind in ("runtime", "dashboard"):
             with self.subTest(kind=kind):
@@ -229,6 +258,26 @@ class HttpServerBoundaryTests(unittest.TestCase):
         self.assertEqual(dashboard["trusted_proxy"], "127.0.0.1")
         self.assertEqual(dashboard["trusted_proxy_headers"], {"x-forwarded-proto"})
         self.assertTrue(dashboard["clear_untrusted_proxy_headers"])
+
+    def test_each_http_server_has_explicit_small_connection_and_input_bounds(self):
+        for caregiver in (False, True):
+            with self.subTest(caregiver=caregiver):
+                options = create_http_server(lambda app, **opts: opts, object(),
+                                             8766 if caregiver else 8765, caregiver)
+                self.assertEqual(options["connection_limit"], 32)
+                self.assertEqual(options["backlog"], 32)
+                self.assertEqual(options["channel_timeout"], 30)
+                self.assertEqual(options["cleanup_interval"], 5)
+                self.assertEqual(options["max_request_body_size"], 16384)
+                self.assertEqual(options["max_request_header_size"], 16384)
+
+    @unittest.skipUnless(importlib.util.find_spec("waitress"), "Waitress unavailable")
+    def test_installed_waitress_accepts_all_server_options(self):
+        from waitress.adjustments import Adjustments
+        options = create_http_server(lambda app, **opts: opts, object(), 8766, True)
+        actual = Adjustments(**options)
+        self.assertEqual(actual.connection_limit, 32)
+        self.assertEqual(actual.max_request_body_size, 16384)
 
     @unittest.skipUnless(
         importlib.util.find_spec("waitress"),

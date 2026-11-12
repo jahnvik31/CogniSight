@@ -54,6 +54,14 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(q.get(0.01).text, "automatic")
         self.assertIsNone(q.get(0.01))
 
+    def test_equal_priority_is_fifo_and_explicit_eviction_keeps_older_automatic(self):
+        q = SpeechQueue(3)
+        for text in ("first", "second", "third"):
+            self.assertTrue(q.put(text, lambda: True, 0, 0))
+        self.assertTrue(q.put("explicit", lambda: True, 1, 0))
+        self.assertEqual([q.get(0.01).text for _ in range(3)],
+                         ["explicit", "first", "second"])
+
     def test_requested_speech_replaces_low_priority_and_clear_drops_pending(self):
         q = SpeechQueue(1)
         q.put("automatic", lambda: True, 0, 0)
@@ -149,6 +157,45 @@ class EngineTests(unittest.TestCase):
             speech_worker.join(1)
         self.assertEqual(observed, [1])
         self.assertEqual(old_stream.closes, 1)
+
+    def test_stuck_worker_remains_owned_and_prevents_restart(self):
+        # A native worker may ignore stop. Never forget it and open another route.
+        class StuckWorker:
+            def join(self, timeout):
+                pass
+
+            def is_alive(self):
+                return True
+
+        worker = StuckWorker()
+        self.engine._threads = [worker]
+        try:
+            with self.assertRaisesRegex(RuntimeError, "Audio worker failed to stop"):
+                self.engine.close()
+            self.assertEqual(self.engine._threads, [worker])
+            with patch("cognisight.recognition.audio.threading.Thread") as factory:
+                self.engine.start()
+                factory.assert_not_called()
+        finally:
+            self.engine._threads = []
+
+    def test_expiry_during_synthesis_never_opens_output(self):
+        visible = [True]
+        engine = self.engine
+
+        class Voice:
+            def synthesize(self, text):
+                visible[0] = False
+                engine._stop.set()
+                yield object()
+
+        engine._voice = Voice()
+        engine._available.set()
+        self.assertTrue(engine.say("Example person", valid=lambda: visible[0]))
+        with patch.object(engine, "_check_routes") as routes:
+            engine._speak()
+            routes.assert_not_called()
+        self.assertFalse(engine.speaking)
 
     def test_unavailable_output_does_not_queue_private_speech(self):
         self.assertFalse(self.engine.available)

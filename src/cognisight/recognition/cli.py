@@ -63,7 +63,12 @@ def validate_service_ports(config, enrollment_port):
 
 
 def create_http_server(factory, app, port, caregiver=False):
-    options = {"host": "127.0.0.1", "port": port, "threads": 2}
+    options = {
+        "host": "127.0.0.1", "port": port, "threads": 2,
+        "connection_limit": 32, "backlog": 32,
+        "channel_timeout": 30, "cleanup_interval": 5,
+        "max_request_body_size": 16384, "max_request_header_size": 16384,
+    }
     if caregiver:
         # Trust only TLS scheme from the same-host reverse proxy. In particular,
         # preserve the real loopback peer for the dashboard's proxy guard and
@@ -167,11 +172,13 @@ def run_services(
             # it underneath that worker; supervisor/process exit owns cleanup.
             logging.getLogger("cognisight").error("Service shutdown exceeded timeout")
             raise RuntimeError("Service shutdown exceeded timeout")
-        if cleanup_failed:
+        if cleanup_failed or getattr(runtime, "cleanup_failed", False):
             # In particular, a stalled Waitress request may still use SQLite.
             # Leave its handle open for process/supervisor cleanup on failure.
             raise RuntimeError("Service cleanup failed")
         store.close()
+        if failed.is_set():
+            raise RuntimeError("Service worker terminated")
 
 
 def _run_service_command(args, config):
@@ -273,7 +280,8 @@ def main(argv=None):
         description="Offline contextual recognition and local caregiver enrollment"
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("doctor", help="Report environment; does not certify hardware")
+    doctor_parser = sub.add_parser("doctor", help="Report environment; does not certify hardware")
+    doctor_parser.add_argument("--native", action="store_true", help="Explicit isolated native imports; no devices are opened")
     sub.add_parser("devices", help="List audio devices without selecting defaults")
     password = sub.add_parser(
         "password", help="Set local caregiver password interactively"
@@ -295,6 +303,12 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == "doctor":
+            if args.native:
+                from .diagnostics import native_report
+
+                report = native_report()
+                print(json.dumps(report, indent=2))
+                return 0 if all(item["state"] == "passed" for item in report["dependencies"].values()) else 1
             print(json.dumps(doctor(), indent=2))
             return 0
         if args.command == "devices":

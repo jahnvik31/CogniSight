@@ -1,6 +1,7 @@
 """Single camera owner, expiring context, and isolated module events."""
 
 import logging
+import math
 import queue
 import sqlite3
 import threading
@@ -8,7 +9,7 @@ import time
 from datetime import datetime, timezone
 from .matching import Gallery, normalize
 from .tracking import Tracker
-from .types import RecognitionEvent, clock_utc
+from .types import RecognitionEvent
 
 LOG = logging.getLogger(__name__)
 
@@ -19,7 +20,10 @@ class Runtime:
     ):
         self.store, self.config, self.vision, self.audio = store, config, vision, audio
         self.navigation = navigation
+        self.cleanup_failed = False
         self.observed_monotonic = None
+        self._dashboard_people = []
+        self._dashboard_revision = -1
         self.clock = clock
         self.lock = threading.RLock()
         self.tracker = Tracker()
@@ -81,14 +85,14 @@ class Runtime:
         ).to_dict()
         for channel in self.events:
             try:
-                channel.put_nowait(data)
+                channel.put_nowait(dict(data))
             except queue.Full:
                 try:
                     channel.get_nowait()
                 except queue.Empty:
                     pass
                 try:
-                    channel.put_nowait(data)
+                    channel.put_nowait(dict(data))
                 except queue.Full:
                     pass
 
@@ -137,30 +141,20 @@ class Runtime:
                 state, reason = "unavailable", "recognition_not_ready"
             elif age is None:
                 state, reason = "unavailable", "no_observation"
-            elif age > 1:
+            elif age >= 1:
                 state, reason = "stale", "observation_expired"
             else:
                 state, reason = "live", "current_observation"
             people = []
+            # Profile reads belong to the producer, never to an HTTP request.
+            # A profile edit invalidates the cached projection immediately; the
+            # next observation will republish verified current fields.
             if state == "live":
-                seen = set()
-                try:
-                    for track in self.tracker.visible(now):
-                        if track.person_id in seen:
-                            continue
-                        person = self.store.person(track.person_id)
-                        if person and person["active"]:
-                            people.append(
-                                {
-                                    "person_id": person["id"],
-                                    "name": person["name"],
-                                    "relationship": person["relationship"],
-                                    "note": person["note"],
-                                }
-                            )
-                            seen.add(track.person_id)
-                except sqlite3.Error:
-                    state, reason, people = "unavailable", "storage_unavailable", []
+                if self._dashboard_revision != self.store.revision:
+                    state, reason = "unavailable", "profiles_changed"
+                else:
+                    people = [dict(person) for person, last_seen in self._dashboard_people
+                              if 0 <= now - last_seen < 1]
             recognition = {
                 "status": state,
                 "reason": reason,
@@ -211,9 +205,10 @@ class Runtime:
             if not person or not person["active"]:
                 return False
             if automatic:
+                now = max(self.now, self.clock())
                 return any(
-                    t.person_id == person_id
-                    for t in self.tracker.visible(max(self.now, self.clock()))
+                    t.person_id == person_id and 0 <= now - t.last_seen < 1
+                    for t in self.tracker.visible(now)
                 )
             return self.tracker.recent(person_id, max(self.now, self.clock()))
 
@@ -241,6 +236,11 @@ class Runtime:
 
     def observe(self, detections, now, utc):
         with self.lock:
+            if (isinstance(now, bool) or not isinstance(now, (int, float))
+                    or not math.isfinite(now) or now < 0):
+                raise ValueError("Invalid observation time")
+            if self.observed_monotonic is not None and now <= self.observed_monotonic:
+                return  # Duplicate/out-of-order evidence cannot extend presence.
             self.now, self.utc = now, utc
             self.health["clock"] = "available" if utc is not None else "unreliable"
             if self.paused or self.enrollment or not self.config.get("calibrated"):
@@ -279,6 +279,20 @@ class Runtime:
                         if self._speak(text, person_id, priority=0):
                             self.tracker.should_announce(person_id, now)
             self.store.prune(utc)
+            revision = self.store.revision
+            people, seen = [], set()
+            for track in visible:
+                if track.person_id in seen:
+                    continue
+                person = self.store.person(track.person_id)
+                if person and person["active"]:
+                    people.append(({
+                        "person_id": person["id"], "name": person["name"],
+                        "relationship": person["relationship"], "note": person["note"],
+                    }, track.last_seen))
+                    seen.add(track.person_id)
+            self._dashboard_people = people
+            self._dashboard_revision = revision
 
     def _reset_presence(self):
         for person_id in self.encounter_last:
@@ -293,6 +307,7 @@ class Runtime:
         self.tracker.announced = announced
         self.context_person = None
         self.last_response = None
+        self._dashboard_people = []
         if self.audio:
             self.audio.cancel()
 
@@ -481,6 +496,12 @@ class Runtime:
             self.gallery_revision = revision
 
     def run(self):
+        try:
+            self._run_devices()
+        finally:
+            self._close_devices()
+
+    def _run_devices(self):
         started = False
         retry_at = 0.0
         if self.navigation:
@@ -511,8 +532,8 @@ class Runtime:
                     self.stopping.wait(0.2)
                     continue
                 frame = self.vision.read()
-                if time.monotonic() - frame.captured_at > 1:
-                    self.observe([], time.monotonic(), clock_utc())
+                if time.monotonic() - frame.captured_at >= 1:
+                    self.observe([], frame.captured_at, frame.utc)
                     continue
                 with self.lock:
                     if self.paused or self.enrollment:
@@ -521,7 +542,11 @@ class Runtime:
                     detections = [
                         (bbox, self.gallery.match(vector)) for bbox, vector in observations
                     ]
-                    self.observe(detections, time.monotonic(), frame.utc)
+                    # Inference completion is not new evidence. An old frame
+                    # may expire tracks, but cannot confirm or announce a face.
+                    if time.monotonic() - frame.captured_at >= 1:
+                        detections = []
+                    self.observe(detections, frame.captured_at, frame.utc)
                 self.on_health("camera", "ready")
             except sqlite3.Error:
                 self.on_health("storage", "unavailable")
@@ -543,14 +568,23 @@ class Runtime:
                 started = False
                 retry_at = time.monotonic() + 5
             self.stopping.wait(max(0.0, 0.2 - (time.monotonic() - tick)))
-        if self.navigation:
-            self.navigation.close()
-        if self.audio:
-            self.audio.close()
-        if self.vision:
-            self.vision.close()
-        with self.lock:
-            self._reset_presence()
+
+    def _close_devices(self):
+        failure = None
+        for owner in (self.navigation, self.audio, self.vision):
+            if owner is not None:
+                try:
+                    owner.close()
+                except Exception as exc:
+                    failure = failure or exc
+        try:
+            with self.lock:
+                self._reset_presence()
+        except Exception as exc:
+            failure = failure or exc
+        if failure is not None:
+            self.cleanup_failed = True
+            raise RuntimeError("One or more runtime owners failed to close") from failure
 
     def close(self):
         self.stopping.set()
