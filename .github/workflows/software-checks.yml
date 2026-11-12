@@ -1,0 +1,55 @@
+name: Software checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  software:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install software-test dependencies
+        run: python -m pip install -e '.[vision,dev]' build
+      - name: Run full software suite without dependency skips
+        run: |
+          python - <<'PY'
+          import unittest
+          result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.discover('tests'))
+          if result.skipped:
+              print('Software CI requires every test dependency and socket-boundary check; skips are not accepted.')
+          raise SystemExit(0 if result.wasSuccessful() and not result.skipped else 1)
+          PY
+      - name: Test shipped dashboard JavaScript behavior
+        run: node --test tests/dashboard.test.cjs
+      - name: Build and check packaged dashboard assets
+        run: |
+          python -m build --wheel
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          wheel = next(Path('dist').glob('*.whl'))
+          with ZipFile(wheel) as archive:
+              files = set(archive.namelist())
+          required = {
+              'cognisight/caregiver/templates/caregiver_dashboard.html',
+              'cognisight/caregiver/templates/caregiver_login.html',
+              'cognisight/caregiver/static/dashboard.css',
+              'cognisight/caregiver/static/dashboard.js',
+              'cognisight/recognition/templates/enroll.html',
+          }
+          assert required <= files, 'Built wheel is missing required UI assets'
+          PY

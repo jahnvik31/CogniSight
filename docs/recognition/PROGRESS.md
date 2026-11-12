@@ -71,3 +71,16 @@ prepared locally; publishing/PR requires a valid GitHub login and network access
   indoor and health status; no second camera owner or invented indoor data.
 - Pre-commit full suite: 128 tests, 116 pass, 12 explicit environment/dependency
   skips. New temporal and bridge cases pass against real storage/state logic.
+
+## Issues #3 and #4 implemented in parallel
+
+- User confirmed every module is fresh, has a GNSS board, selected verified
+  location/status first, and selected a caregiver phone on the same Wi-Fi.
+- GPSD and caregiver software, comprehensive plans, deployment guidance and
+  lifecycle wiring are committed separately. Exact board wiring is not guessed.
+- Independent review corrected Waitress proxy filtering, session auto-renewal,
+  keepalive/request-worker cleanup, inference-lock blocking, and HTTPS CSRF
+  Referer compatibility. Native-dependency checks remain visibly skipped locally.
+- Real shipped UI rendered at phone width with clearly simulated intercepted data;
+  three shipped-JavaScript behavior tests pass. CI rejects dependency skips and
+  checks wheel assets once it can run. See docs/VALIDATION.md for release boundaries.
