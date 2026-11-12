@@ -62,3 +62,12 @@ prepared locally; publishing/PR requires a valid GitHub login and network access
   private, and cannot clobber input files or symlink targets.
 - Validation: 87 tests run, 80 pass, seven dependency skips. All new acceptance
   regressions were observed failing before the fix. No target hardware claims.
+
+- Temporal regressions reproduced and fixed: frame gaps cannot complete a
+  three-observation identity confirmation; expired tracks retire before spatial
+  reassociation; returning people start new encounters after ten seconds.
+- Speech validity now checks elapsed monotonic time even without another camera
+  frame. Added read-only dashboard projection with separate recognition, outdoor,
+  indoor and health status; no second camera owner or invented indoor data.
+- Pre-commit full suite: 128 tests, 116 pass, 12 explicit environment/dependency
+  skips. New temporal and bridge cases pass against real storage/state logic.

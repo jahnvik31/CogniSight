@@ -41,10 +41,22 @@ class Tracker:
     def update(self, detections, now):
         self.last_update = now
         events = []
+        # A long inference/capture gap is not a consecutive observation. Retire
+        # expired tracks before association so a returning face gets a new ID.
+        for key, track in list(self.tracks.items()):
+            elapsed = now - track.last_seen
+            if elapsed >= 10:
+                if track.person_id:
+                    events.append(TrackEvent("lost", key, track.person_id))
+                del self.tracks[key]
+            elif elapsed > 1:
+                track.streak = 0
+                track.candidate = None
         unused = set(self.tracks)
         for bbox, match in detections[:4]:
             candidates = sorted(
-                ((iou(bbox, self.tracks[key].bbox), key) for key in unused), reverse=True
+                ((iou(bbox, self.tracks[key].bbox), key) for key in unused),
+                reverse=True,
             )
             # If overlap is ambiguous, create a fresh unconfirmed track instead of swapping identities.
             if (
@@ -97,7 +109,8 @@ class Tracker:
 
     def recent(self, person_id, now):
         return any(
-            t.person_id == person_id and now - t.last_seen <= 10 for t in self.tracks.values()
+            t.person_id == person_id and now - t.last_seen <= 10
+            for t in self.tracks.values()
         )
 
     def should_announce(self, person_id, now):
@@ -120,6 +133,8 @@ class Tracker:
             if t.last_seen == self.last_update and now - t.last_seen <= 1
         ]
         choices = sorted(current, key=score, reverse=True)
-        if not choices or (len(choices) > 1 and score(choices[1]) >= score(choices[0]) * 0.85):
+        if not choices or (
+            len(choices) > 1 and score(choices[1]) >= score(choices[0]) * 0.85
+        ):
             return None
         return choices[0] if choices[0] in self.visible(now) else None

@@ -38,8 +38,14 @@ class RuntimeTests(unittest.TestCase):
         self.audio = Audio()
         self.runtime = Runtime(
             self.store,
-            {"model_version": "v1", "threshold": 0.8, "margin": 0.1, "calibrated": True},
+            {
+                "model_version": "v1",
+                "threshold": 0.8,
+                "margin": 0.1,
+                "calibrated": True,
+            },
             audio=self.audio,
+            clock=lambda: self.runtime.now,
         )
 
     def tearDown(self):
@@ -144,7 +150,9 @@ class AdditionalRuntimeTests(unittest.TestCase):
     def test_edited_profile_invalidates_old_queued_speech(self):
         self.confirm()
         valid = self.audio.messages[-1][1]
-        self.store.update(self.p, "Different name", "different relationship", "", "", True)
+        self.store.update(
+            self.p, "Different name", "different relationship", "", "", True
+        )
         self.assertFalse(valid())
 
     def test_presence_reset_preserves_announcement_cooldown(self):
@@ -156,7 +164,9 @@ class AdditionalRuntimeTests(unittest.TestCase):
 
     def test_unreliable_clock_does_not_fake_history(self):
         for now in (0, 0.2, 0.4):
-            self.runtime.observe([((0, 0, 100, 100), Match("known", self.p, 0.99))], now, None)
+            self.runtime.observe(
+                [((0, 0, 100, 100), Match("known", self.p, 0.99))], now, None
+            )
         self.runtime.command("history", now=0.5)
         self.assertIn("unreliable", self.audio.messages[-1][0])
 
@@ -184,7 +194,9 @@ class RecoveryTests(unittest.TestCase):
         self.confirm()
         self.assertEqual(len(self.audio.messages), 0)
         self.audio.available = True
-        self.runtime.observe([((0, 0, 100, 100), Match("known", self.p, 0.99))], 0.6, None)
+        self.runtime.observe(
+            [((0, 0, 100, 100), Match("known", self.p, 0.99))], 0.6, None
+        )
         self.assertEqual(len(self.audio.messages), 1)
 
     def test_storage_failure_during_reset_does_not_kill_runtime(self):
@@ -193,7 +205,9 @@ class RecoveryTests(unittest.TestCase):
 
         self.confirm()
         with patch.object(
-            self.store, "end_encounter", side_effect=sqlite3.OperationalError("disk full")
+            self.store,
+            "end_encounter",
+            side_effect=sqlite3.OperationalError("disk full"),
         ):
             self.runtime._reset_presence()
         self.assertEqual(self.runtime.health["storage"], "unavailable")

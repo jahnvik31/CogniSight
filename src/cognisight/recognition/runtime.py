@@ -14,8 +14,13 @@ LOG = logging.getLogger(__name__)
 
 
 class Runtime:
-    def __init__(self, store, config, vision=None, audio=None):
+    def __init__(
+        self, store, config, vision=None, audio=None, clock=time.monotonic, navigation=None
+    ):
         self.store, self.config, self.vision, self.audio = store, config, vision, audio
+        self.navigation = navigation
+        self.observed_monotonic = None
+        self.clock = clock
         self.lock = threading.RLock()
         self.tracker = Tracker()
         self.paused = False
@@ -30,6 +35,7 @@ class Runtime:
         self.context_person = None
         self.previous = {}
         self.encounter_last = {}
+        self.encounter_utc = {}
         self.last_response = None
         self.health = {
             "camera": "not_started",
@@ -43,7 +49,9 @@ class Runtime:
         self.stopping = threading.Event()
         self.gallery_revision = -1
         self.gallery = Gallery(
-            store.gallery(config["model_version"]), config["threshold"], config["margin"]
+            store.gallery(config["model_version"]),
+            config["threshold"],
+            config["margin"],
         )
 
     def on_health(self, component, state):
@@ -65,7 +73,11 @@ class Runtime:
 
     def _publish(self, event):
         data = RecognitionEvent(
-            event.kind, event.track_id, event.person_id, self.utc, self.config["model_version"]
+            event.kind,
+            event.track_id,
+            event.person_id,
+            self.utc,
+            self.config["model_version"],
         ).to_dict()
         for channel in self.events:
             try:
@@ -96,6 +108,81 @@ class Runtime:
                 schema_version=1,
             )
 
+    def dashboard_snapshot(self):
+        """Read-only projection; no camera reads, embeddings, or device controls."""
+        with self.lock:
+            now = max(self.now, self.clock())
+            age = (
+                None if self.observed_monotonic is None else max(0.0, now - self.observed_monotonic)
+            )
+            if self.paused or self.enrollment:
+                state, reason = "paused", "recognition_suspended"
+            elif not self.config.get("calibrated"):
+                state, reason = "uncalibrated", "calibration_required"
+            elif self.health["camera"] != "ready" or self.health["storage"] != "ready":
+                state, reason = "unavailable", "recognition_not_ready"
+            elif age is None:
+                state, reason = "unavailable", "no_observation"
+            elif age > 1:
+                state, reason = "stale", "observation_expired"
+            else:
+                state, reason = "live", "current_observation"
+            people = []
+            if state == "live":
+                seen = set()
+                try:
+                    for track in self.tracker.visible(now):
+                        if track.person_id in seen:
+                            continue
+                        person = self.store.person(track.person_id)
+                        if person and person["active"]:
+                            people.append(
+                                {
+                                    "person_id": person["id"],
+                                    "name": person["name"],
+                                    "relationship": person["relationship"],
+                                    "note": person["note"],
+                                }
+                            )
+                            seen.add(track.person_id)
+                except sqlite3.Error:
+                    state, reason, people = "unavailable", "storage_unavailable", []
+            recognition = {
+                "status": state,
+                "reason": reason,
+                "people": people,
+                "data_source": "live" if state == "live" else "unavailable",
+                "observed_at": self.utc,
+                "age_seconds": age,
+                "max_age_seconds": 1,
+            }
+            health = dict(self.health)
+        outdoor = {
+            "status": "unavailable",
+            "reason": "not_configured",
+            "data_source": "unavailable",
+            "latitude": None,
+            "longitude": None,
+            "observed_at": None,
+            "age_seconds": None,
+        }
+        if self.navigation is not None:
+            try:
+                outdoor = self.navigation.snapshot()
+            except Exception:
+                outdoor["reason"] = "receiver_unavailable"
+        return {
+            "schema_version": 1,
+            "recognition": recognition,
+            "outdoor": outdoor,
+            "indoor": {
+                "status": "unavailable",
+                "reason": "not_integrated",
+                "data_source": "unavailable",
+            },
+            "health": health,
+        }
+
     def _valid_person(self, person_id, automatic=False):
         with self.lock:
             if self.paused or self.enrollment or not self.config.get("calibrated"):
@@ -104,8 +191,11 @@ class Runtime:
             if not person or not person["active"]:
                 return False
             if automatic:
-                return any(t.person_id == person_id for t in self.tracker.visible(self.now))
-            return self.tracker.recent(person_id, self.now)
+                return any(
+                    t.person_id == person_id
+                    for t in self.tracker.visible(max(self.now, self.clock()))
+                )
+            return self.tracker.recent(person_id, max(self.now, self.clock()))
 
     def _speak(self, text, person_id=None, priority=1):
         if not self.audio:
@@ -135,6 +225,12 @@ class Runtime:
             self.health["clock"] = "available" if utc is not None else "unreliable"
             if self.paused or self.enrollment or not self.config.get("calibrated"):
                 return
+            self.observed_monotonic = now
+            # Expire the old encounter BEFORE a returning face refreshes its age.
+            for person_id, last in list(self.encounter_last.items()):
+                if now - last >= 10:
+                    self.store.end_encounter(person_id, self.encounter_utc.pop(person_id, None))
+                    del self.encounter_last[person_id]
             events = self.tracker.update(detections, now)
             visible = self.tracker.visible(now)
             for track in visible:
@@ -142,10 +238,7 @@ class Runtime:
                 if p not in self.encounter_last:
                     self.previous[p] = self.store.start_encounter(p, utc)
                 self.encounter_last[p] = now
-            for person_id, last in list(self.encounter_last.items()):
-                if now - last >= 10:
-                    self.store.end_encounter(person_id, utc)
-                    del self.encounter_last[person_id]
+                self.encounter_utc[p] = utc
             for event in events:
                 self._publish(event)
             # Readiness can change after initial confirmation (startup/replug).
@@ -170,10 +263,11 @@ class Runtime:
     def _reset_presence(self):
         for person_id in self.encounter_last:
             try:
-                self.store.end_encounter(person_id, self.utc)
+                self.store.end_encounter(person_id, self.encounter_utc.get(person_id))
             except sqlite3.Error:
                 self.health["storage"] = "unavailable"
         self.encounter_last.clear()
+        self.encounter_utc.clear()
         announced = self.tracker.announced
         self.tracker = Tracker()
         self.tracker.announced = announced
@@ -184,7 +278,7 @@ class Runtime:
 
     def command(self, intent, now=None):
         with self.lock:
-            self.now = time.monotonic() if now is None else now
+            self.now = self.clock() if now is None else now
             if intent == "stop":
                 if self.audio:
                     self.audio.cancel()
@@ -354,6 +448,7 @@ class Runtime:
             self.store.clear_history()
             self.previous.clear()
             self.encounter_last.clear()
+            self.encounter_utc.clear()
 
     def reload_gallery(self):
         revision = self.store.revision
@@ -368,6 +463,11 @@ class Runtime:
     def run(self):
         started = False
         retry_at = 0.0
+        if self.navigation:
+            try:
+                self.navigation.start()
+            except Exception:
+                LOG.warning("Outdoor navigation unavailable at startup")
         if self.audio:
             self.audio.start()
         while not self.stopping.is_set():
@@ -423,6 +523,8 @@ class Runtime:
                 started = False
                 retry_at = time.monotonic() + 5
             self.stopping.wait(max(0.0, 0.2 - (time.monotonic() - tick)))
+        if self.navigation:
+            self.navigation.close()
         if self.audio:
             self.audio.close()
         if self.vision:
