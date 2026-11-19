@@ -87,13 +87,17 @@ def main(argv=None):
         if not args.image.is_file():
             print("No photo at {}".format(args.image), file=sys.stderr)
             return 1
+        created = False
         try:
             gallery.get(args.name)
         except KeyError:
             gallery.create(args.name, args.relationship, args.note)
+            created = True
         try:
             saved = gallery.add_photo(args.name, args.image.read_bytes(), args.image.suffix)
         except ValueError as exc:
+            if created:
+                gallery.delete(args.name)  # no half-saved person without a photo
             print(exc, file=sys.stderr)
             return 1
         print(saved)
@@ -118,10 +122,12 @@ def _start(args, gallery):
     from cognisight.location import Locator
     from cognisight.runtime import Runtime
     from cognisight.server import create_app, serve
+    from cognisight.signs import SignStore
 
     args.gallery.mkdir(parents=True, exist_ok=True)
     runtime = Runtime(
         gallery,
+        signs=SignStore(args.gallery.parent / "signs.json"),
         camera_factory=partial(open_camera, args.camera, args.flip, args.swap_colors),
         interval=args.interval,
         port=args.port,

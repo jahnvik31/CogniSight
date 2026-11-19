@@ -214,7 +214,8 @@ export default function Device() {
             </Show>
             <Toggle
               enabled={!!s().listening?.enabled}
-              available={!!s().listening?.available}
+              // Always allowed, so a microphone plugged in later can be tried again.
+              available={true}
               onLabel="Turn listening on"
               offLabel="Turn listening off"
               onToggle={toggleListening}

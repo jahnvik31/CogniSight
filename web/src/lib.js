@@ -126,6 +126,15 @@ export function clockTime(at) {
   }
 }
 
+// "2:14 pm" in this browser's locale.
+export function timeOfDay(at) {
+  try {
+    return toLocalDate(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
 export function duration(seconds) {
   if (typeof seconds !== "number" || !Number.isFinite(seconds)) return "Unknown";
   const s = Math.max(0, Math.floor(seconds));

@@ -43,15 +43,28 @@ class AnnouncerTests(unittest.TestCase):
         self.assertEqual(introduction("Ravi", "my neighbour"), "This is Ravi, your neighbour.")
         self.assertEqual(introduction("Dr Rao", "the family doctor"), "This is Dr Rao, the family doctor.")
 
-    def test_speaks_at_once_then_waits_out_the_cooldown(self):
+    def test_speaks_at_once_and_again_only_after_two_minutes_away(self):
         self.assertEqual(self.announcer.seen("Priya", "daughter"), "This is Priya, your daughter.")
         self.clock.now += 60
         self.assertIsNone(self.announcer.seen("Priya", "daughter"))
         self.assertEqual(self.announcer.seen("Ravi"), "This is Ravi.")
-        self.clock.now += 61
+        self.clock.now += 121  # Priya was out of view for 2 minutes
         self.assertIsNotNone(self.announcer.seen("Priya", "daughter"))
         self.assertEqual(len(self.speaker.said), 3)
         self.assertEqual(self.said, self.speaker.said)
+
+    def test_someone_who_stays_in_view_is_introduced_once(self):
+        for _ in range(20):  # ten minutes, seen every 30 seconds
+            self.announcer.seen("Priya", "daughter")
+            self.clock.now += 30
+        self.assertEqual(self.speaker.said, ["This is Priya, your daughter."])
+
+    def test_not_lost_while_speech_is_still_loading(self):
+        self.speaker.available = False
+        self.assertIsNone(self.announcer.seen("Priya"))
+        self.speaker.available = True
+        self.clock.now += 5
+        self.assertEqual(self.announcer.seen("Priya"), "This is Priya.")
 
     def test_muted_says_nothing_and_introduces_after_unmute(self):
         self.announcer.enabled = False

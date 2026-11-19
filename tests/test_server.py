@@ -6,6 +6,7 @@ from pathlib import Path
 from cognisight.faces import Gallery
 from cognisight.runtime import CameraUnavailable, Runtime
 from cognisight.server import create_app
+from cognisight.signs import SignStore
 from test_faces import FakeEmbedder
 
 
@@ -17,8 +18,8 @@ class NoCamera:
 class FakeRuntime(Runtime):
     """A real Runtime that is never started, with a scripted camera frame."""
 
-    def __init__(self, gallery, frame=None):
-        super().__init__(gallery, camera_factory=NoCamera(), speech=False, listen=False)
+    def __init__(self, gallery, frame=None, signs=None):
+        super().__init__(gallery, signs=signs, camera_factory=NoCamera(), speech=False, listen=False)
         self.frame_bytes = frame
 
     def capture(self):
@@ -32,7 +33,7 @@ class ServerTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         root = Path(self.directory.name)
         self.gallery = Gallery(root / "faces", FakeEmbedder())
-        self.runtime = FakeRuntime(self.gallery)
+        self.runtime = FakeRuntime(self.gallery, signs=SignStore(root / "signs.json"))
         static = root / "dist"
         static.mkdir()
         (static / "index.html").write_text("<html>dashboard</html>")
@@ -128,6 +129,43 @@ class ServerTests(unittest.TestCase):
             response = self.client.get(path)
             self.assertIn(b"dashboard", response.data)
             response.close()
+
+    def test_signs_links_plan_and_guide(self):
+        kitchen = self.client.post("/api/signs", json={"name": "Kitchen", "aliases": "pantry, cookhouse"})
+        self.assertEqual(kitchen.status_code, 201)
+        self.assertEqual(kitchen.get_json()["aliases"], ["pantry", "cookhouse"])
+        hall = self.client.post("/api/signs", json={"name": "Hallway"}).get_json()
+        self.assertEqual(self.client.post("/api/signs", json={"name": "kitchen"}).status_code, 409)
+        self.assertEqual(self.client.post("/api/signs", json={}).status_code, 400)
+        kid = kitchen.get_json()["id"]
+        links = self.client.put(
+            "/api/signs/{}/links".format(hall["id"]), json={"links": [{"to": kid, "text": "Straight ahead."}]}
+        )
+        self.assertEqual(links.get_json()["links"], [{"from": hall["id"], "to": kid, "text": "Straight ahead."}])
+        bad = self.client.put("/api/signs/{}/links".format(hall["id"]), json={"links": [{"to": 49, "text": "x"}]})
+        self.assertEqual(bad.status_code, 400)
+        plan = self.client.put("/api/plan", json={"width": 8, "height": 6, "signs": [{"sign": kid, "x": 1, "y": 2, "facing": 0}]})
+        self.assertEqual(plan.get_json()["signs"][0]["sign"], kid)
+        self.assertEqual(self.client.put("/api/plan", json=["no"]).status_code, 400)
+        self.runtime.navigator.sighting(hall["id"])
+        guide = self.client.post("/api/guide", json={"destination": kid}).get_json()
+        self.assertEqual(guide["destination"]["name"], "Kitchen")
+        self.assertEqual(guide["said"], "Straight ahead.")
+        home = self.client.get("/api/home").get_json()
+        self.assertEqual(home["room"]["name"], "Hallway")
+        self.assertIsNotNone(home["guide"])
+        self.assertIsNotNone([s for s in home["signs"] if s["id"] == hall["id"]][0]["last_seen"])
+        live = self.client.get("/api/live").get_json()
+        self.assertEqual(live["room"]["name"], "Hallway")
+        self.assertEqual(live["markers"], [])
+        self.assertEqual(self.client.delete("/api/guide").status_code, 204)
+        self.assertEqual(self.client.post("/api/guide", json={"destination": 40}).status_code, 404)
+        self.assertEqual(self.client.delete("/api/signs/{}".format(hall["id"])).status_code, 204)
+        self.assertIsNone(self.client.get("/api/home").get_json()["room"])
+        self.assertEqual(self.client.patch("/api/signs/{}".format(kid), json={"say_note": True}).get_json()["say_note"], True)
+        self.assertEqual(self.client.patch("/api/signs/44", json={"name": "x"}).status_code, 404)
+        kinds = {e["kind"] for e in self.client.get("/api/events").get_json()["events"]}
+        self.assertTrue({"room", "guide"} <= kinds)
 
 
 if __name__ == "__main__":

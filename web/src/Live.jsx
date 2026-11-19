@@ -1,8 +1,21 @@
-import { createEffect, createMemo, createSignal, Index, Show } from "solid-js";
-import { deviceNow, getEvents, getLive, listPeople, offline, photoUrl, setSpeech, testSpeech } from "./api";
+import { createEffect, createMemo, createSignal, For, Index, Show } from "solid-js";
+import {
+  deviceNow,
+  getEvents,
+  getHome,
+  getLive,
+  listPeople,
+  offline,
+  photoUrl,
+  setSpeech,
+  startGuide,
+  stopGuide,
+  testSpeech,
+} from "./api";
 import Camera from "./Camera";
 import { useStatus } from "./context";
-import { UnknownFace } from "./icons";
+import { placeName, roomLine, signName, signsOf } from "./signs";
+import { HomeIcon, UnknownFace } from "./icons";
 import { ago, capitalise, clockTime, isoTime, personHref, plural, useNow, usePoll, useTitle } from "./lib";
 
 const CAPTION_SECONDS = 20;
@@ -12,6 +25,8 @@ const KINDS = {
   unknown: "Unknown face",
   said: "Said to them",
   heard: "Heard a command",
+  room: "Moved room",
+  guide: "Guiding",
   system: "Device",
 };
 
@@ -71,6 +86,14 @@ function WithThemNow(props) {
   return (
     <section class="now" aria-labelledby="now-heading">
       <h2 id="now-heading">With them now</h2>
+      <Show when={!offline() && roomLine(props.live?.room, props.now)}>
+        {(line) => (
+          <p class="now-place" classList={{ "is-stale": line().stale }}>
+            <HomeIcon />
+            <span>{line().text}</span>
+          </p>
+        )}
+      </Show>
       <Show
         when={!offline() && props.live}
         fallback={<p class="now-empty">{offline() ? "Waiting for the device." : "Checking…"}</p>}
@@ -166,7 +189,11 @@ function Timeline(props) {
       <Show when={props.loaded} fallback={<p class="muted">Loading today's activity…</p>}>
         <Show
           when={today().length}
-          fallback={<p class="muted">Nothing yet today. When CogniSight recognises someone or speaks to them, it shows up here.</p>}
+          fallback={
+            <p class="muted">
+              Nothing yet today. When CogniSight recognises someone, reads a sign, or speaks to them, it shows up here.
+            </p>
+          }
         >
           <ol class="timeline">
             <Index each={today()}>{(event) => <Row event={event()} />}</Index>
@@ -261,6 +288,160 @@ function SpeechControls() {
   );
 }
 
+function GuideCard(props) {
+  const [destination, setDestination] = createSignal("");
+  const [busy, setBusy] = createSignal("");
+  const [message, setMessage] = createSignal("");
+  const [error, setError] = createSignal("");
+
+  const byId = createMemo(() => new Map(props.signs.map((s) => [s.id, s])));
+  const guide = () => (props.guide && typeof props.guide === "object" ? props.guide : null);
+  const route = () => (Array.isArray(guide()?.route) ? guide().route.filter(Number.isInteger) : []);
+  const atIndex = () => {
+    const at = guide()?.at;
+    return Number.isInteger(at) ? route().lastIndexOf(at) : -1;
+  };
+  const destName = () => {
+    const d = guide()?.destination;
+    return d?.name || signName(byId().get(d?.id), d?.id);
+  };
+  const arrived = () => {
+    const d = guide()?.destination;
+    return !!d && Number.isInteger(d.id) && guide().at === d.id;
+  };
+  // Signs up to and including the last one seen are done; the next one is current.
+  const stepState = (i) => (i <= atIndex() ? "done" : i === atIndex() + 1 ? "current" : "todo");
+
+  async function start(event) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    if (!destination()) {
+      setError("Choose the room to guide them to.");
+      return;
+    }
+    setBusy("start");
+    try {
+      const chosen = byId().get(Number(destination()));
+      const next = await startGuide(Number(destination()));
+      props.onChange(next && typeof next === "object" ? next : null);
+      setMessage(`Guiding them to ${placeName(next?.destination?.name || signName(chosen))}.`);
+      setDestination("");
+    } catch (err) {
+      setError(`Couldn't start guiding. ${err.message}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function stop() {
+    setBusy("stop");
+    setMessage("");
+    setError("");
+    try {
+      await stopGuide();
+      props.onChange(null);
+      setMessage("Stopped guiding.");
+    } catch (err) {
+      setError(`Couldn't stop guiding. ${err.message}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <section class="guide" aria-labelledby="guide-heading">
+      <h2 id="guide-heading">{guide() ? `Guiding them to ${placeName(destName())}` : "Guide them to a room"}</h2>
+      <Show
+        when={guide()}
+        fallback={
+          <Show
+            when={props.signs.length > 1}
+            fallback={
+              <p class="muted">
+                <Show when={props.loaded} fallback="Loading the signs…">
+                  Put up at least two signs, with directions between them, to guide them from room to room.{" "}
+                  <a href="/home">Go to Home</a>
+                </Show>
+              </p>
+            }
+          >
+            <form class="guide-form" onSubmit={start} novalidate>
+              <label for="guide-to">Guide them to…</label>
+              <div class="guide-row">
+                <select
+                  id="guide-to"
+                  class="select"
+                  aria-invalid={error() && !destination() ? "true" : undefined}
+                  aria-describedby="guide-hint"
+                  onChange={(e) => setDestination(e.currentTarget.value)}
+                >
+                  <option value="" disabled selected={destination() === ""}>
+                    Choose a room
+                  </option>
+                  <For each={props.signs}>
+                    {(s) => (
+                      <option value={String(s.id)} selected={destination() === String(s.id)}>
+                        {signName(s)}
+                      </option>
+                    )}
+                  </For>
+                </select>
+                <button type="submit" class="button primary" disabled={busy() !== "" || offline()}>
+                  {busy() === "start" ? "Starting…" : "Start guiding"}
+                </button>
+              </div>
+              <p id="guide-hint" class="hint">
+                They hear one step at each sign on the way.
+              </p>
+            </form>
+          </Show>
+        }
+      >
+        <Show when={route().length} fallback={<p class="muted">No route planned yet.</p>}>
+          <ol class="route-steps">
+            <For each={route()}>
+              {(id, i) => (
+                <li class={`step is-${stepState(i())}`} aria-current={stepState(i()) === "current" ? "step" : undefined}>
+                  <span class="step-dot" aria-hidden="true" />
+                  <span class="step-name">{signName(byId().get(id), id)}</span>
+                  <span class="sr-only">
+                    {stepState(i()) === "done" ? ", reached" : stepState(i()) === "current" ? ", next" : ""}
+                  </span>
+                </li>
+              )}
+            </For>
+          </ol>
+        </Show>
+        <Show when={arrived()}>
+          <p class="note-ok">They've reached {placeName(destName())}.</p>
+        </Show>
+        <Show when={guide().said}>
+          <p class="guide-said">
+            <span class="muted">Last said: </span>“{guide().said}”
+          </p>
+        </Show>
+        <Show when={Number.isFinite(guide().started)}>
+          <p class="muted guide-started">Started {ago(guide().started, props.now)}</p>
+        </Show>
+        <div class="actions">
+          <button type="button" class="button" disabled={busy() !== "" || offline()} onClick={stop}>
+            {busy() === "stop" ? "Stopping…" : "Stop guiding"}
+          </button>
+        </div>
+      </Show>
+      <div class="speech-feedback">
+        <p role="status" class="ok-text">
+          {message()}
+        </p>
+        <p role="alert" class="error-text">
+          {error()}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export default function Live() {
   useTitle("Live");
   const now = useNow(1000);
@@ -268,6 +449,16 @@ export default function Live() {
   const events = usePoll(() => getEvents(50), 2000);
   const people = usePoll(listPeople, 30000);
   const byName = createMemo(() => new Map((people.data() || []).map((p) => [p.name, p])));
+  const home = usePoll(getHome, 10000);
+  const signs = () => signsOf(home.data());
+  const signsInView = () =>
+    (Array.isArray(live.data()?.markers) ? live.data().markers : [])
+      .filter((m) => m && Number.isInteger(m.id))
+      .map((m) => m.name || `Sign ${m.id}`);
+  const setGuide = (guide) => {
+    live.mutate({ ...(live.data() || {}), guide });
+    live.refresh();
+  };
 
   const known = () => (live.data()?.faces || []).filter((f) => f && f.name).length;
 
@@ -284,11 +475,18 @@ export default function Live() {
         <div class="live-main">
           <Camera camera={live.data()?.camera} frame={live.data()?.frame}>
             <Caption said={live.data()?.said} now={now()} />
+            <Show when={!offline() && signsInView().length}>
+              <p class="sign-chip">
+                {signsInView().length === 1 ? "Sign in view: " : "Signs in view: "}
+                {signsInView().join(", ")}
+              </p>
+            </Show>
           </Camera>
           <SpeechControls />
         </div>
         <div class="live-side">
           <WithThemNow live={live.data()} people={byName()} now={now()} />
+          <GuideCard guide={live.data()?.guide} signs={signs()} loaded={home.loaded()} now={now()} onChange={setGuide} />
           <Timeline events={events.data()} loaded={events.loaded()} error={events.error()} now={now()} />
         </div>
       </div>

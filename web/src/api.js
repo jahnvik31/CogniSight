@@ -150,5 +150,21 @@ export const deletePhoto = (name, filename) =>
 export const photoUrl = (name, filename) => personPath(name) + "/photos/" + enc(filename);
 
 // Location
-export const getLocation = () => request("/api/location", { timeout: 20000 });
+export const getLocation = () => request("/api/location", { timeout: 30000 });
 export const refreshLocation = () => request("/api/location/refresh", { method: "POST", timeout: 30000 });
+
+// Home: signs, directions between them, the floor plan, and guiding
+const signPath = (id) => "/api/signs/" + enc(id);
+
+export const getHome = () => request("/api/home");
+export const addSign = (fields) => request("/api/signs", { method: "POST", json: fields });
+export const updateSign = (id, fields) => request(signPath(id), { method: "PATCH", json: fields });
+export const deleteSign = (id) => request(signPath(id), { method: "DELETE" });
+// Replaces every direction leaving this sign. Resolves to the full list of links for every sign.
+export const saveLinks = (id, links) =>
+  request(signPath(id) + "/links", { method: "PUT", json: { links } }).then((data) =>
+    Array.isArray(data) ? data : Array.isArray(data?.links) ? data.links : [],
+  );
+export const savePlan = (plan) => request("/api/plan", { method: "PUT", json: plan });
+export const startGuide = (destination) => request("/api/guide", { method: "POST", json: { destination } });
+export const stopGuide = () => request("/api/guide", { method: "DELETE" });

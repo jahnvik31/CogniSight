@@ -3,11 +3,12 @@ import { useLocation } from "@solidjs/router";
 import { getStatus, offline } from "./api";
 import { StatusContext } from "./context";
 import { usePoll } from "./lib";
-import { DeviceIcon, LiveIcon, PeopleIcon, PlaceIcon } from "./icons";
+import { DeviceIcon, HomeIcon, LiveIcon, PeopleIcon, PlaceIcon } from "./icons";
 
 const TABS = [
   { href: "/", label: "Live", Icon: LiveIcon },
   { href: "/people", label: "People", Icon: PeopleIcon },
+  { href: "/home", label: "Home", Icon: HomeIcon },
   { href: "/place", label: "Place", Icon: PlaceIcon },
   { href: "/device", label: "Device", Icon: DeviceIcon },
 ];

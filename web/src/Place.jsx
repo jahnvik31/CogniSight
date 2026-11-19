@@ -1,8 +1,73 @@
-import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { getLocation, offline, refreshLocation } from "./api";
-import { ago, clockTime, plural, useNow, usePoll, useTitle } from "./lib";
+import { deviceNow, getEvents, getHome, getLocation, offline, refreshLocation } from "./api";
+import { placeName, ROOM_FRESH_SECONDS } from "./signs";
+import { ago, clockTime, isoTime, plural, timeOfDay, useNow, usePoll, useTitle } from "./lib";
+
+// Which room they are in, from the last sign the camera read, and today's moves.
+function AtHome(props) {
+  const home = usePoll(getHome, 5000);
+  const events = usePoll(() => getEvents(200), 15000);
+  const room = () => (home.data()?.room && home.data().room.name ? home.data().room : null);
+
+  const startOfToday = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() / 1000 + (deviceNow() - Date.now() / 1000);
+  };
+  const moves = () =>
+    (events.data() || []).filter((e) => e && e.kind === "room" && typeof e.at === "number" && e.at >= startOfToday()).slice(0, 8);
+
+  const line = () => {
+    const r = room();
+    if (!r) return null;
+    const since = Number.isFinite(r.since) ? ` since ${timeOfDay(r.since)}` : "";
+    return `In ${placeName(r.name)}${since}`;
+  };
+  const stale = () => {
+    const seen = room()?.seen_at;
+    return Number.isFinite(seen) && props.now - seen > ROOM_FRESH_SECONDS;
+  };
+
+  return (
+    <section class="at-home" aria-labelledby="at-home-heading">
+      <h2 id="at-home-heading" class="h3">
+        At home
+      </h2>
+      <Show when={home.loaded()} fallback={<p class="muted">{home.error() && !offline() ? `Couldn't check which room they're in. ${home.error().message}` : "Checking…"}</p>}>
+        <Show
+          when={room()}
+          fallback={
+            <p class="muted">
+              No sign seen yet. Put up signs from the <a href="/home">Home page</a>.
+            </p>
+          }
+        >
+          <p class="at-home-room">{line()}</p>
+          <Show when={stale()}>
+            <p class="muted">The camera last read a sign {ago(room().seen_at, props.now)}.</p>
+          </Show>
+        </Show>
+        <Show when={moves().length}>
+          <h3 class="moves-heading">Today's room changes</h3>
+          <ol class="moves">
+            <For each={moves()}>
+              {(e) => (
+                <li>
+                  <time datetime={isoTime(e.at)} title={clockTime(e.at)}>
+                    {timeOfDay(e.at)}
+                  </time>
+                  <span>{e.text || "Moved room"}</span>
+                </li>
+              )}
+            </For>
+          </ol>
+        </Show>
+      </Show>
+    </section>
+  );
+}
 
 function cssVar(name, fallback) {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -159,6 +224,11 @@ export default function Place() {
       const from = n === null ? "nearby Wi-Fi access points" : plural(n, "nearby Wi-Fi access point");
       return `Placed from ${from}, within about ${metres(accuracy())}.`;
     }
+    if (Number.isFinite(d.access_points) && d.access_points >= 2) {
+      return `Google could not match the ${d.access_points} nearby Wi-Fi access points, so it placed the device from its internet connection. This is a rough area, about ${widthKm(
+        accuracy(),
+      )} wide.`;
+    }
     return `Only the internet connection's location was available, so this is a rough area, about ${widthKm(
       accuracy(),
     )} wide. Google needs at least two Wi-Fi access points in range for a closer fix.`;
@@ -171,11 +241,15 @@ export default function Place() {
 
   return (
     <div class="page place">
-      <div class="page-head with-action">
-        <div>
-          <h1 tabindex="-1">Place</h1>
-          <p class="lede">Where the device is, as closely as it can tell.</p>
-        </div>
+      <div class="page-head">
+        <h1 tabindex="-1">Place</h1>
+        <p class="lede">Where they are: the room at home, and the device's position on the map.</p>
+      </div>
+
+      <AtHome now={now()} />
+
+      <div class="map-head">
+        <h2 class="h3">On the map</h2>
         <button type="button" class="button" onClick={checkAgain} disabled={checking() || offline()}>
           {checking() ? "Checking…" : "Check again"}
         </button>

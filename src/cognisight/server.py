@@ -13,6 +13,10 @@ from cognisight.runtime import CameraUnavailable
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 
 
+class SignsUnavailable(Exception):
+    pass
+
+
 def create_app(gallery, runtime, locator=None, static_dir=None):
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
@@ -199,6 +203,119 @@ def create_app(gallery, runtime, locator=None, static_dir=None):
             return error("That photo is not saved.", 404)
         return "", 204
 
+    # ------------------------------------------------------------ home: signs and plan
+
+    def sign_json(sign):
+        navigator = runtime.navigator
+        sign = dict(sign)
+        sign["last_seen"] = navigator.last_seen.get(sign["id"]) if navigator else None
+        return sign
+
+    def store():
+        if runtime.signs is None:
+            raise SignsUnavailable
+        return runtime.signs
+
+    def body():
+        data = request.get_json(silent=True)
+        return data if isinstance(data, dict) else {}
+
+    @app.get("/api/home")
+    def home():
+        try:
+            signs = store()
+        except SignsUnavailable:
+            return error("Signs are not available.", 503)
+        return jsonify(
+            signs=[sign_json(s) for s in signs.signs()],
+            links=signs.links(),
+            plan=signs.plan(),
+            **runtime.home_state(),
+        )
+
+    @app.post("/api/signs")
+    def create_sign():
+        data = body()
+        try:
+            sign = store().create(data.get("name"), data.get("aliases"), data.get("note", ""), data.get("say_note", False))
+        except SignsUnavailable:
+            return error("Signs are not available.", 503)
+        except (FileExistsError, OverflowError) as exc:
+            return error(str(exc), 409)
+        except ValueError as exc:
+            return error(str(exc), 400)
+        return jsonify(sign_json(sign)), 201
+
+    @app.patch("/api/signs/<int:sign_id>")
+    def update_sign(sign_id):
+        data = body()
+        fields = {key: data.get(key) for key in ("name", "aliases", "note", "say_note") if key in data}
+        try:
+            sign = store().update(sign_id, **fields)
+        except SignsUnavailable:
+            return error("Signs are not available.", 503)
+        except KeyError:
+            return error("That sign is not saved.", 404)
+        except FileExistsError as exc:
+            return error(str(exc), 409)
+        except ValueError as exc:
+            return error(str(exc), 400)
+        return jsonify(sign_json(sign))
+
+    @app.delete("/api/signs/<int:sign_id>")
+    def delete_sign(sign_id):
+        try:
+            store().delete(sign_id)
+        except SignsUnavailable:
+            return error("Signs are not available.", 503)
+        except KeyError:
+            return error("That sign is not saved.", 404)
+        if runtime.navigator is not None:
+            runtime.navigator.forget(sign_id)
+        return "", 204
+
+    @app.put("/api/signs/<int:sign_id>/links")
+    def set_links(sign_id):
+        links = body().get("links")
+        if not isinstance(links, list):
+            return error("Send the directions as a list.", 400)
+        try:
+            all_links = store().set_links(sign_id, links)
+        except SignsUnavailable:
+            return error("Signs are not available.", 503)
+        except KeyError:
+            return error("That sign is not saved.", 404)
+        except ValueError as exc:
+            return error(str(exc), 400)
+        return jsonify(links=all_links)
+
+    @app.put("/api/plan")
+    def set_plan():
+        try:
+            plan = store().set_plan(request.get_json(silent=True))
+        except SignsUnavailable:
+            return error("Signs are not available.", 503)
+        except ValueError as exc:
+            return error(str(exc), 400)
+        return jsonify(plan)
+
+    @app.post("/api/guide")
+    def start_guide():
+        if runtime.navigator is None:
+            return error("Signs are not available.", 503)
+        try:
+            destination = int(body().get("destination"))
+            guide = runtime.navigator.start(destination)
+        except (TypeError, ValueError, KeyError):
+            return error("Choose a sign to guide them to.", 404)
+        return jsonify(guide)
+
+    @app.delete("/api/guide")
+    def stop_guide():
+        if runtime.navigator is not None:
+            runtime.navigator.stop("Stopped guiding from the dashboard")
+        return "", 204
+
     # ------------------------------------------------------------ location
 
     @app.get("/api/location")
@@ -213,7 +330,7 @@ def create_app(gallery, runtime, locator=None, static_dir=None):
             return error("Location is not available.", 503)
         return jsonify(locator.current(force=True))
 
-    @app.route("/api/<path:_>", methods=["GET", "POST", "PATCH", "DELETE"])
+    @app.route("/api/<path:_>", methods=["GET", "POST", "PATCH", "PUT", "DELETE"])
     def unknown_api(_):
         return error("No such API route.", 404)
 

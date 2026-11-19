@@ -73,6 +73,26 @@ To stop CogniSight, press `Ctrl+C` in the terminal.
 5. With a microphone connected, say "who is this?" to hear the name again, or
    "stop" to cut the speech off.
 
+## Signs around the home (indoor guidance)
+
+1. Open **Home** and add a sign for each place that matters: Bedroom, Hallway,
+   Bathroom, Kitchen. For each one, write a short direction to the next sign,
+   for someone standing in front of it ("The bathroom is the second door on
+   your right.").
+2. Optionally draw the house on the floor plan: walls, doors, room names, and
+   where each sign goes. The shaded wedge in front of a sign shows where the
+   wearer has to stand for the camera to read it.
+3. Press **Print signs**, print one A4 sheet per sign, and tape each at eye
+   level beside its door.
+4. When the camera sees a sign, the wearer hears "This is the kitchen." To guide
+   them, choose a room under **Guide them to…** on the Live page, or let them
+   say "take me to the bathroom". They hear one step at each sign until "You're
+   at the bathroom."
+
+Demo with three printed sheets (Bedroom, Hallway, Bathroom) taped around the
+room: start at Bedroom, press **Guide them to… Bathroom**, and walk past the
+signs while the dashboard ticks off the route.
+
 ## If something looks wrong
 
 | Problem | Fix |
@@ -84,6 +104,7 @@ To stop CogniSight, press `Ctrl+C` in the terminal.
 | Voice commands do nothing | Bluetooth earphone mics are unreliable on the Pi. Use a USB microphone |
 | Phone can't open the dashboard | Phone and Pi must be on the same Wi-Fi. Try the numeric address on the Device page |
 | Someone is not recognised | Add more photos of them, facing the camera, in similar light |
+| A sign is not read | Walk closer (about 2.5 m or less), face it, and make sure it is printed at full A4 size and lit |
 
 ## Commands
 

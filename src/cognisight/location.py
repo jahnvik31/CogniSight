@@ -17,6 +17,7 @@ import urllib.request
 
 ENDPOINT = "https://www.googleapis.com/geolocation/v1/geolocate?key={}"
 CACHE_SECONDS = 300
+ERROR_CACHE_SECONDS = 30  # retry a failed lookup sooner
 # Google answers from Wi-Fi in tens to hundreds of metres. Past this radius
 # the answer came from the internet address, whatever we sent.
 WIFI_ACCURACY_LIMIT = 1000.0
@@ -65,7 +66,7 @@ def scan_wifi():
             ["nmcli", "-t", "-f", "BSSID,SIGNAL,CHAN", "dev", "wifi", "list", "--rescan", "auto"],
             capture_output=True,
             text=True,
-            timeout=20,
+            timeout=10,
         )
     except (OSError, subprocess.SubprocessError):
         return []
@@ -77,7 +78,7 @@ def post_json(url, body):
         url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
     )
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:
+        with urllib.request.urlopen(request, timeout=10) as response:
             return response.status, json.loads(response.read().decode() or "{}")
     except urllib.error.HTTPError as exc:
         try:
@@ -135,7 +136,8 @@ class Locator:
 
     def current(self, force=False):
         with self._lock:
-            fresh = self._last and self._clock() - self._last["checked_at"] < CACHE_SECONDS
+            keep = CACHE_SECONDS if self._last and self._last["status"] != "error" else ERROR_CACHE_SECONDS
+            fresh = self._last and self._clock() - self._last["checked_at"] < keep
             if force or not fresh:
                 points = self._scan() if self.key else []
                 self._last = lookup(self.key, points, self._post, self._clock)

@@ -6,6 +6,8 @@ Three background threads share this object:
   one, plus a JPEG with boxes drawn on it for the dashboard stream;
 * recognition: takes the newest frame, names the faces in it, and tells the
   announcer;
+* signs: reads printed sign markers in the newest frame and moves the
+  navigator (where the wearer is, and any trip in progress);
 * voice: loads speech (and optionally listening) without blocking start-up.
 
 Nothing here raises when the camera, DeepFace, or audio is missing. Each part
@@ -20,11 +22,14 @@ import time
 
 from cognisight.camera import open_camera
 from cognisight.faces import DETECTOR, MODEL
-from cognisight.voice import Announcer, Listener, NullSpeaker, load_speaker
+from cognisight.signs import MarkerDetector, Navigator, the
+from cognisight.voice import Announcer, Listener, NullSpeaker, load_speaker, parse_command
 
 SEEN_GAP_SECONDS = 30
 KNOWN_COLOR = (79, 107, 47)  # BGR moss
 UNKNOWN_COLOR = (22, 138, 201)  # BGR marigold
+SIGN_COLOR = (138, 95, 47)  # BGR of the dashboard's route blue, #2F5F8A
+SIGN_INTERVAL = 0.25
 
 
 class CameraUnavailable(RuntimeError):
@@ -35,6 +40,7 @@ class Runtime:
     def __init__(
         self,
         gallery,
+        signs=None,
         camera_factory=open_camera,
         speaker_factory=load_speaker,
         listener_factory=Listener,
@@ -45,6 +51,7 @@ class Runtime:
         listen_model="tiny",
     ):
         self.gallery = gallery
+        self.signs = signs
         self.port = port
         self.interval = interval
         self._camera_factory = camera_factory
@@ -84,6 +91,14 @@ class Runtime:
         self._listen_error = "Loading listening…" if listen else "Listening is off."
         self._listening = False
 
+        self._markers = []
+        self._signs_error = None
+        self.navigator = None
+        if signs is not None:
+            self.navigator = Navigator(
+                signs, say=self.announcer.say, event=self.event, can_speak=self.announcer.can_speak
+            )
+
     # ------------------------------------------------------------ lifecycle
 
     def start(self):
@@ -94,7 +109,7 @@ class Runtime:
                 __import__(module)
             except ImportError:
                 pass
-        for target in (self._camera_loop, self._recognition_loop, self._voice_setup):
+        for target in (self._camera_loop, self._recognition_loop, self._sign_loop, self._voice_setup):
             threading.Thread(target=target, daemon=True, name=target.__name__).start()
         self.event("system", None, "CogniSight started")
         return self
@@ -157,6 +172,17 @@ class Runtime:
         image = frame.copy()
         with self._lock:
             faces = list(self._faces)
+            markers = list(self._markers)
+        for marker in markers:
+            points = [(int(x), int(y)) for x, y in marker["corners"]]
+            for i in range(4):
+                cv2.line(image, points[i], points[(i + 1) % 4], SIGN_COLOR, 3)
+            label = marker["name"]
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+            x = min(p[0] for p in points)
+            y = max(p[1] for p in points) + 6
+            cv2.rectangle(image, (x - 2, y), (x + tw + 14, y + th + 14), SIGN_COLOR, -1)
+            cv2.putText(image, label, (x + 6, y + th + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
         for face in faces:
             x, y, w, h = face.box
             color = KNOWN_COLOR if face.name else UNKNOWN_COLOR
@@ -261,6 +287,45 @@ class Runtime:
             names = {face.name for face in self._faces if face.name}
         return [person for person in self.gallery.people() if person.name in names]
 
+    # ------------------------------------------------------------ signs
+
+    def _sign_loop(self):
+        if self.navigator is None:
+            return
+        try:
+            detector = MarkerDetector()
+        except Exception as exc:
+            self._signs_error = "Signs need OpenCV with the ArUco module: {}".format(exc)
+            self.event("system", None, self._signs_error)
+            return
+        last = -1
+        while not self._stop.is_set():
+            with self._frame_ready:
+                self._frame_ready.wait_for(lambda: self._frame_number != last or self._stop.is_set(), timeout=2)
+                frame = self._frame
+                last = self._frame_number
+            if frame is None:
+                continue
+            try:
+                found = detector.detect(frame)
+                self._signs_error = None
+            except Exception as exc:
+                self._signs_error = "Reading signs failed: {}".format(exc)
+                found = []
+            markers = []
+            for sign_id, corners in found:
+                sign = self.signs.get(sign_id)
+                if sign is not None:
+                    markers.append({"id": sign_id, "name": sign["name"], "corners": corners})
+            with self._lock:
+                self._markers = markers
+            self.navigator.seen([marker["id"] for marker in markers])
+            self._stop.wait(SIGN_INTERVAL)
+
+    def markers(self):
+        with self._lock:
+            return list(self._markers)
+
     # ------------------------------------------------------------ voice
 
     def _voice_setup(self):
@@ -281,10 +346,48 @@ class Runtime:
         self.event("said", None, text)
 
     def _on_heard(self, text):
-        command = self.announcer.handle(text, self.in_view())
+        command = parse_command(text)
+        # Over a loudspeaker the microphone hears the device itself ("Let's go
+        # to the bathroom" sounds like a request). While it is talking, only
+        # "stop" counts.
+        talking = getattr(self.announcer.speaker, "is_talking", lambda: False)
+        try:
+            busy = bool(talking())
+        except Exception:
+            busy = False
+        if busy and command != "stop":
+            return
+        if command == "go" or (command is None and "where am i" in text.lower()):
+            self._navigate_by_voice(text)
+            command = command or "where"
+        elif command == "stop":
+            self.announcer.handle(text, [])
+            if self.navigator is not None and self.navigator.guide is not None:
+                self.navigator.stop("Stopped guiding when asked")
+        else:
+            command = self.announcer.handle(text, self.in_view())
         if command:
             self._heard = {"text": text.strip(), "at": time.time()}
             self.event("heard", None, "Heard “{}”".format(text.strip()))
+
+    def _navigate_by_voice(self, text):
+        if self.navigator is None:
+            return
+        if "where am i" in text.lower():
+            room = self.navigator.state()["room"]
+            if room and time.time() - room["seen_at"] <= 300:
+                self.announcer.say("You're in {}.".format(the(room["name"])))
+            else:
+                self.announcer.say("I'm not sure. Look around for a sign on the wall.")
+            return
+        sign = self.signs.find_destination(text)
+        if sign is None:
+            names = ", ".join(s["name"] for s in self.signs.signs()[:6])
+            self.announcer.say(
+                "I don't know that room. I know {}.".format(names) if names else "I don't know any rooms yet."
+            )
+            return
+        self.navigator.start(sign["id"])
 
     def set_speech(self, enabled):
         self.announcer.enabled = bool(enabled)
@@ -362,7 +465,14 @@ class Runtime:
             ],
             "updated": updated,
             "said": self._said,
+            **self.home_state(),
+            "markers": [{"id": m["id"], "name": m["name"], "corners": m["corners"]} for m in self.markers()],
         }
+
+    def home_state(self):
+        if self.navigator is None:
+            return {"room": None, "guide": None}
+        return self.navigator.state()
 
     def speech_status(self):
         speaker = self.announcer.speaker
@@ -403,6 +513,11 @@ class Runtime:
             "speech": self.speech_status(),
             "listening": self.listening_status(),
             "people": len(self.gallery.people()),
+            "signs": {
+                "ok": self.navigator is not None and self._signs_error is None,
+                "count": len(self.signs.signs()) if self.signs is not None else 0,
+                "error": self._signs_error,
+            },
         }
 
 

@@ -1,5 +1,13 @@
 # CogniSight product notes
 
+> **Historical.** These are the product discussion notes from before the
+> current design. Parts of them describe code that no longer exists (the
+> YuNet/SFace pipeline and the typed indoor map) and plans that changed. Indoor
+> navigation was later rebuilt as talking signposts, and the dashboard was
+> rebuilt. For the current system, read
+> [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) and
+> [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md).
+
 Product discussion only. This file does not authorize code changes.
 
 ## Product framing
