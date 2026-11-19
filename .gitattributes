@@ -1,3 +1,7 @@
 # Generated document/image artifacts must not be treated as line-oriented text.
 *.pdf binary
 *.png binary
+
+# Shell scripts run on the Pi and must keep Unix line endings.
+*.sh text eol=lf
+*.service text eol=lf

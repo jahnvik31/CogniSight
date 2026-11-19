@@ -1,0 +1,20 @@
+{
+  "name": "cognisight-care",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
+    "@solidjs/router": "^0.15.3",
+    "leaflet": "^1.9.4",
+    "solid-js": "^1.9.9"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5",
+    "vite-plugin-solid": "^2.11.6"
+  }
+}

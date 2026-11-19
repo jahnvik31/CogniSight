@@ -223,17 +223,17 @@ __marimo__/
 
 # Private recognition state and downloaded models
 .superpowers/
+.models/
 models/
+web/node_modules/
+# web/dist is committed on purpose: the Pi serves it without Node.
+!/web/dist/
 qualification-private/
 *.sqlite3*
 *.db*
 *.onnx
 *.wav
 
-# Local device configuration; commit only the reviewed examples.
-/config.json
-/deploy/Caddyfile
-/Caddyfile
 
 # Private runtime/evaluation exports accidentally copied into the checkout.
 # Normal runtime state belongs outside this repository (enforced by the CLI).
@@ -260,3 +260,6 @@ service.lock
 /cognisight-code*.tar.gz
 .playwright-mcp/
 .DS_Store
+
+# Camera check output
+camera-check.jpg

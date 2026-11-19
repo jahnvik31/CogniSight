@@ -1,24 +1,18 @@
+# Optional: run CogniSight as a background service without the desktop.
+# Install:  mkdir -p ~/.config/systemd/user && cp deploy/cognisight.service ~/.config/systemd/user/
+#           systemctl --user daemon-reload && systemctl --user enable --now cognisight
+# Logs:     journalctl --user -u cognisight -f
 [Unit]
-Description=CogniSight offline recognition and local enrollment
-After=sound.target
+Description=CogniSight
+After=network-online.target sound.target pipewire.service
 
 [Service]
 Type=simple
-# Install as a user unit. Set paths for your own checkout/config before enabling.
 WorkingDirectory=%h/CogniSight
-ExecStart=%h/CogniSight/.venv/bin/cognisight run --config %h/CogniSight/config.json
+ExecStart=%h/CogniSight/.venv/bin/cognisight start
 Restart=on-failure
 RestartSec=5
-# Allow sequential device, HTTP-dispatcher and worker joins. Native calls may
-# still hang; systemd terminates the service group when this deadline expires.
-TimeoutStopSec=90
-UMask=0077
-NoNewPrivileges=true
-PrivateTmp=true
 Environment=PYTHONUNBUFFERED=1
-Environment=OMP_NUM_THREADS=2
-Environment=OPENBLAS_NUM_THREADS=1
-MemoryMax=4G
 
 [Install]
 WantedBy=default.target

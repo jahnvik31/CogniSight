@@ -1,74 +1,113 @@
 # CogniSight
 
-**Next coding agent or device contributor:** read [NEXT_AGENT_README.md](NEXT_AGENT_README.md) first. It records the implemented software, hardware corrections and remaining device tests.
+CogniSight helps a person living with dementia recognise the people around
+them. A Raspberry Pi camera sees who is in front of them, and a quiet voice in
+their earphones says "This is Priya, your daughter." Family members add people
+and watch what the device sees from a dashboard on their phone.
 
-CogniSight is an assistive technology project intended to support people living with dementia through contextual recognition, navigation assistance, and caregiver support.
+What it does, why, and what was dropped from the original plan:
+[docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md).
 
-## Project Status
+## What you need
 
-**Phase:** Available-module software and indoor map authoring implemented; target-hardware qualification pending.
+- Raspberry Pi 5 with Raspberry Pi OS (64-bit, with desktop), connected to Wi-Fi
+- Raspberry Pi Camera Module 2 on the 22-pin ribbon cable
+- Bluetooth earphones (or any speaker) for the spoken names
+- Optional: a monitor, and a USB microphone for voice commands
+- About 3 GB of free space and an internet connection for the first setup
 
-Fresh recognition, GNSS positioning, and caregiver-monitoring implementations are present. System contracts, Pi diagnostics, and available-module software integration are implemented. Target Raspberry Pi, receiver, headset, and phone qualification remains pending; software tests do not establish hardware compatibility.
+## Set it up (once)
 
-## Modules
-
-### 1. Contextual Facial Recognition
-Recognises registered people and uses stored relationship and contextual information to provide meaningful assistance.
-
-### 2. Outdoor Navigation
-Acquires verified location/status from local GPSD, distinguishing current fixes from historical locations. Walking-route directions are outside this version.
-
-### 3. Indoor Navigation
-The caregiver dashboard can create, edit, save, and export a versioned home room map with doorway/corridor connections and landmark metadata. It can preview the shortest room sequence between a manually selected demo start and destination. Camera landmark detection/localization and directional or spoken indoor guidance are not implemented; live indoor status remains unavailable.
-
-### 4. Caregiver Support
-Authenticated dashboard for a caregiver phone on the same Wi-Fi, with HTTPS, read-only module monitoring, indoor map configuration, and stale/unavailable-data handling. Enrollment remains local to the Pi.
-
-*Physical compatibility and accuracy must still be measured. Map authoring does not implement indoor localization or navigation.*
-
-## Development Workflow
-
-- `main` contains the stable, reviewed version.
-- Develop new work on feature branches.
-- Submit pull requests for review before merging.
-- Test changes and document setup instructions.
-- Track work and known issues through GitHub Issues.
-
-The user explicitly authorized this completion release directly to main; see the scoped exception in [AGENTS.md](AGENTS.md).
-
-## Setup
-
-Download the [printable next-steps PDF](output/pdf/CogniSight-next-steps.pdf). It contains a short checklist and the full laptop/Pi/phone procedure.
-
-For the physical-device contributor, start with the [simple SSH runbook](docs/hardware/PI-RUNBOOK.md) and [hardware checklist](docs/hardware/README.md). See the [architecture and editable draw.io diagram](docs/architecture.md) and [module contracts](docs/system/CONTRACTS.md).
-
-Then read [recognition and service setup](docs/recognition/README.md), then [GNSS configuration](docs/navigation/README.md) and [same-Wi-Fi phone access](docs/caregiver/README.md). See [software validation and remaining release gates](docs/VALIDATION.md).
-
-For the indoor map authoring milestone, see [schema, dashboard API, and limitations](docs/indoor/README.md).
-
-## Team
-
-This is a collaborative student project. Module ownership and contributions will be documented as integration progresses.
-
-## Facial recognition module (issue #2)
-
-A fresh offline recognition, verified-context, USB voice, and local enrollment
-implementation is available. See [setup and operation](docs/recognition/README.md),
-[approved plan](docs/recognition/PLAN.md), and
-[hardware qualification gates](docs/recognition/QUALIFICATION.md).
-
-**Hardware qualification is pending.** Local policy tests are not proof of Pi
-compatibility, recognition accuracy, or live audio performance. Existing modules
-remain independently owned; optional GPSD and caregiver monitoring connect through the documented module contracts.
-
-## Software checks
+Open a Terminal on the Pi and run:
 
 ```sh
-PYTHONPATH=src python3 -m unittest discover -s tests -v
-node --test tests/dashboard.test.cjs
+git clone https://github.com/jahnvik31/CogniSight.git
+cd CogniSight
+./setup.sh
 ```
 
-GitHub Actions installs the web/vision test dependencies and rejects skipped
-software checks. Local wheel building, real Flask/Waitress integration and OpenCV image-quality checks
-have passed; see [validation](docs/VALIDATION.md) for the exact environment and one
-sandbox socket skip. [GitHub software CI passed](https://github.com/jahnvik31/CogniSight/actions/runs/43267509618) for release commit `2341b42`; check the latest PR-head run too. Native Pi and phone acceptance is a separate requirement.
+This installs everything, downloads the models, and saves one photo from the
+camera as `camera-check.jpg`. It takes 10 to 20 minutes. If the camera check
+fails, check that the ribbon cable is pushed in fully at both ends with the
+contacts facing the right way, then run `./setup.sh` again.
+
+To have CogniSight start by itself whenever the Pi turns on, run
+`./setup.sh --autostart` instead.
+
+### Earphones
+
+Pair the Bluetooth earphones from the Bluetooth icon at the top right of the
+Pi's desktop. Then right-click the speaker icon and choose the earphones as
+the audio output. Spoken names go to whichever output is selected there.
+
+### Location (optional)
+
+Open the `.env` file in the CogniSight folder and paste the Google
+Geolocation key after `GEOLOCATION_API_KEY=`. Restart CogniSight. Google gives
+a close position only when the Pi can hear at least two Wi-Fi access points.
+With fewer, it gives a rough area of a few kilometres, and the dashboard says so.
+
+## Run it
+
+```sh
+cd CogniSight
+./start.sh
+```
+
+The dashboard opens on the Pi's screen. On a phone connected to the **same
+Wi-Fi**, open the address the terminal prints, usually
+`http://cognisight.local:8765`. The Device page shows it too.
+
+To stop CogniSight, press `Ctrl+C` in the terminal.
+
+## Demo in five steps
+
+1. Open **People** and press **Add a person**. Type a name and a relationship
+   ("daughter"), choose **Take photo with the device camera**, have that person
+   face the camera, and press **Take photo and save person**.
+2. On their page, add two or three more photos from slightly different angles.
+3. Open **Live**. When they step in front of the camera, a green box appears
+   with their name, and the earphones say "This is Priya, your daughter." The
+   words also appear as subtitles under the picture.
+4. Someone who is not saved gets an orange "Unknown" box and no announcement.
+5. With a microphone connected, say "who is this?" to hear the name again, or
+   "stop" to cut the speech off.
+
+## If something looks wrong
+
+| Problem | Fix |
+|---|---|
+| Picture is upside down | `./start.sh --flip` |
+| Faces look blue | `./start.sh --swap-colors` |
+| "Camera not found" | Check the ribbon cable, then restart. Test with `.venv/bin/cognisight camera` |
+| No sound | Choose the earphones as the output (speaker icon). Press **Test speech** on the Live page |
+| Voice commands do nothing | Bluetooth earphone mics are unreliable on the Pi. Use a USB microphone |
+| Phone can't open the dashboard | Phone and Pi must be on the same Wi-Fi. Try the numeric address on the Device page |
+| Someone is not recognised | Add more photos of them, facing the camera, in similar light |
+
+## Commands
+
+```sh
+./start.sh                                   # everything: camera, recognition, speech, dashboard
+.venv/bin/cognisight camera                  # save one photo from the camera
+.venv/bin/cognisight enroll "Priya" a.jpg --relationship daughter
+.venv/bin/cognisight identify photo.jpg      # name the people in a photo
+.venv/bin/cognisight start --help            # all options
+```
+
+People are stored as folders of photos under `data/faces/`. Nothing leaves
+the Pi except the location request to Google.
+
+## For developers
+
+- Python code: `src/cognisight/`. Run the tests with `python -m unittest discover -s tests -v`.
+  They need only Flask.
+- Dashboard (SolidJS): `web/`. It is served from the committed `web/dist`. After
+  changing it, run `cd web && npm install && npm run build` and commit `web/dist`.
+  While editing, run `npm run dev` with `cognisight start` running, and open
+  http://localhost:5173.
+- API: [docs/API.md](docs/API.md).
+
+Recognition settings: DeepFace Facenet512, OpenCV face detector, cosine
+distance, cutoff 0.30. The dashboard has no login, so use it only on a trusted
+network.

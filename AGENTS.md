@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-CogniSight is an assistive technology project intended to support people living with dementia through contextual facial recognition, outdoor navigation, indoor navigation, and caregiver support.
+CogniSight is an assistive technology project intended to support people living with dementia through contextual facial recognition, spoken introductions, approximate Wi-Fi location, and a caregiver dashboard. GPS and indoor navigation were dropped; see docs/PROJECT_OVERVIEW.md.
 
-The system is intended to run on Raspberry Pi 5 (8 GB), with a Raspberry Pi Camera Module 2 and a GNSS module. Hardware integration and software compatibility must be verified rather than assumed.
+The system is intended to run on Raspberry Pi 5 (8 GB), with a Raspberry Pi Camera Module 2 and Bluetooth earphones. Hardware integration and software compatibility must be verified rather than assumed.
 
 ## Team Ownership
 
@@ -48,12 +48,9 @@ PR-only steps above for this release. Never force-push, infer successful remote
 publication from local commits, or treat this as permission for unrelated future
 releases. The normal PR workflow still applies afterward.
 
-Read [NEXT_AGENT_README.md](NEXT_AGENT_README.md), [validation](docs/VALIDATION.md),
-the [Pi runbook](docs/hardware/PI-RUNBOOK.md), and the
-[indoor map guide](docs/indoor/README.md) before continuing. Indoor map authoring
-and shortest-path preview from a manually selected demo start are implemented;
-camera localization and directional/spoken guidance are not. Software
-implementation of #6/#7 is present; #8 covers the available-module integration.
+Read [README.md](README.md), [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md),
+and [docs/API.md](docs/API.md) before continuing. The previous design (YuNet/SFace,
+GPS client, typed indoor map) was removed; it survives only in git history.
 Hardware acceptance still requires real devices.
 
 ## Integration Rules
